@@ -12,6 +12,12 @@
           path = workflow.source;
         }) composed.workflows
       );
+      inputAssets = pkgs.linkFarm "comfyui-input-assets" (
+        map (asset: {
+          name = asset.name;
+          path = asset.source;
+        }) composed.inputAssets
+      );
       customNodes = pkgs.linkFarm "comfyui-custom-nodes" (
         map (customNode: {
           name = customNode.name;
@@ -39,6 +45,7 @@
             --root "$workspace/models"
 
           cp -rn ${workflows}/. "$workspace/workflows/"
+          cp -rn ${inputAssets}/. "$workspace/input/"
           cp -rn ${customNodes}/. "$workspace/custom_nodes/"
 
           exec comfyui \
@@ -77,6 +84,7 @@
       packages.comfyui = pkgs.comfyui;
       packages.models = pkgs.writeText "models.json" manifest;
       packages.workflows = workflows;
+      packages.input-assets = inputAssets;
       packages.container = image;
 
       apps.default = {
