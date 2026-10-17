@@ -22,9 +22,6 @@ jobs:
       - uses: DeterminateSystems/nix-installer-action@v23
         with:
           determinate: false
-      - uses: DeterminateSystems/magic-nix-cache-action@v15
-        with:
-          use-flakehub: false
       - name: Build OCI image
         run: nix build .#container
       - name: Log in to GHCR
