@@ -52,6 +52,11 @@ let
         extraArgs = runtimeValue profiles "extraArgs" [ ];
         environment = runtimeValue profiles "environment" { };
       };
+      dependencies = builtins.foldl'
+        (result: profile: result // (profile.dependencies or { })) {
+          python = [ ];
+          customNodes = [ ];
+        } profiles;
     in assert builtins.all validModel models;
     assert unique "model" modelDestinations == modelDestinations;
     assert unique "workflow" (resourceNames workflows)
@@ -60,7 +65,7 @@ let
       == resourceNames inputAssets;
     assert unique "custom node" (resourceNames customNodes)
       == resourceNames customNodes; {
-        inherit models workflows inputAssets customNodes runtime;
+        inherit models workflows inputAssets customNodes runtime dependencies;
       };
 in {
   inherit qwenImage;

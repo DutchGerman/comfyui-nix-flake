@@ -1,204 +1,197 @@
 { inputs, ... }: {
-  perSystem = { pkgs, self', ... }:
+  perSystem = { pkgs, ... }:
     let
       profiles = import ../profiles { inherit pkgs; };
-      composed = profiles.compose profiles.selected;
-      manifest = builtins.toJSON composed.models;
-      workflows = pkgs.linkFarm "comfyui-workflows" (map (workflow: {
-        name = workflow.name;
-        path = workflow.source;
-      }) composed.workflows);
-      inputAssets = pkgs.linkFarm "comfyui-input-assets" (map (asset: {
-        name = asset.name;
-        path = asset.source;
-      }) composed.inputAssets);
-      customNodes = pkgs.linkFarm "comfyui-custom-nodes" (map (customNode: {
-        name = customNode.name;
-        path = customNode.source;
-      }) composed.customNodes);
-      runtimeEnvironment = pkgs.lib.concatStringsSep "\n"
-        (pkgs.lib.mapAttrsToList (name: value: ''
-          : "''${${name}:=${pkgs.lib.escapeShellArg value}}"
-          export ${name}
-        '') composed.runtime.environment);
-      runtimeArgs = pkgs.lib.concatMapStringsSep " " pkgs.lib.escapeShellArg
-        composed.runtime.extraArgs;
-      downloadModels = pkgs.writeShellApplication {
+      profilePackage = profile:
+        let
+          composed = profiles.compose [ profile ];
+          name = profile.installName or profile.name;
+          json = builtins.toJSON {
+            inherit name;
+            installName = name;
+            inherit (composed) models runtime dependencies;
+          };
+          farm = label: entries:
+            pkgs.linkFarm label (map (entry: {
+              inherit (entry) name;
+              path = entry.source;
+            }) entries);
+        in pkgs.linkFarm "nix-comfy-profile-${name}" [
+          {
+            name = "profile.json";
+            path = pkgs.writeText "${name}-profile.json" json;
+          }
+          {
+            name = "workflows";
+            path = farm "${name}-workflows" composed.workflows;
+          }
+          {
+            name = "input";
+            path = farm "${name}-input" composed.inputAssets;
+          }
+          {
+            name = "custom_nodes";
+            path = farm "${name}-custom-nodes" composed.customNodes;
+          }
+        ];
+      profileEntries = map (profile: {
+        name = profile.installName or profile.name;
+        output = "profile-${profile.installName or profile.name}";
+        package = profilePackage profile;
+      }) profiles.available;
+      profileIndex = pkgs.writeText "profile-index.json" (builtins.toJSON
+        (map ({ name, output, ... }: { inherit name output; }) profileEntries));
+      profileAttrs = builtins.listToAttrs (map (entry: {
+        name = entry.output;
+        value = entry.package;
+      }) profileEntries);
+      downloader = pkgs.writeShellApplication {
         name = "download-comfyui-models";
         runtimeInputs = [ pkgs.python3 ];
-        text = ''
-          exec python3 ${../runtime/download-models.py} "$@"
-        '';
+        text = ''exec python3 ${../runtime/download-models.py} "$@"'';
       };
-      profilePackages = map (profile:
-        let
-          composedProfile = profiles.compose [ profile ];
-          profileName = profile.installName or profile.name;
-          profileManifest = builtins.toJSON composedProfile.models;
-          profileWorkflows = pkgs.linkFarm "nix-comfy-${profileName}-workflows"
-            (map (workflow: {
-              name = workflow.name;
-              path = workflow.source;
-            }) composedProfile.workflows);
-          profileInputAssets = pkgs.linkFarm "nix-comfy-${profileName}-input"
-            (map (asset: {
-              name = asset.name;
-              path = asset.source;
-            }) composedProfile.inputAssets);
-          profileCustomNodes =
-            pkgs.linkFarm "nix-comfy-${profileName}-custom-nodes" (map
-              (customNode: {
-                name = customNode.name;
-                path = customNode.source;
-              }) composedProfile.customNodes);
-          profileResources = pkgs.linkFarm "nix-comfy-${profileName}" [
-            {
-              name = "models.json";
-              path = pkgs.writeText "nix-comfy-${profileName}-models.json"
-                profileManifest;
-            }
-            {
-              name = "workflows";
-              path = profileWorkflows;
-            }
-            {
-              name = "input";
-              path = profileInputAssets;
-            }
-            {
-              name = "custom_nodes";
-              path = profileCustomNodes;
-            }
-          ];
-        in {
-          inherit profileName profileResources;
-          runtime = composedProfile.runtime;
-        }) profiles.available;
-      profileList = pkgs.lib.concatMapStringsSep "\n" (profile: ''
-        printf '%s\n' ${pkgs.lib.escapeShellArg profile.profileName}
-      '') profilePackages;
-      profileNames = pkgs.lib.concatMapStringsSep " "
-        (profile: pkgs.lib.escapeShellArg profile.profileName) profilePackages;
-      profileCases = pkgs.lib.concatStringsSep "\n" (map (profile: ''
-        ${pkgs.lib.escapeShellArg profile.profileName})
-          profile=${pkgs.lib.escapeShellArg profile.profileName}
-          manifest=${profile.profileResources}/models.json
-          resources=${profile.profileResources}
-          profileListen=${pkgs.lib.escapeShellArg profile.runtime.listen}
-          profilePort=${toString profile.runtime.port}
-          profileState="$workspace/.nix-comfy/$profile"
-          ;;
-      '') profilePackages);
-      nixComfy = pkgs.writeShellApplication {
+      profileList = pkgs.writeShellApplication {
         name = "nix-comfy";
-        runtimeInputs =
-          [ pkgs.bash pkgs.coreutils downloadModels pkgs.comfyui ];
+        runtimeInputs = [
+          pkgs.bash
+          pkgs.coreutils
+          pkgs.cacert
+          pkgs.git
+          pkgs.nix
+          pkgs.python3
+          pkgs.comfyui
+          downloader
+        ];
         text = ''
-          set -euo pipefail
+                    set -euo pipefail
+                    workspace="''${COMFYUI_WORKSPACE:-/workspace}"
+                    remote="''${NIX_COMFY_FLAKE:-github:DutchGerman/comfyui-nix-flake/master}"
+                    state="$workspace/.nix-comfy"
+                    mkdir -p "$state" "$workspace"
+                    # Runpod images do not have a Nix daemon. Use a local root store and
+                    # append these settings so an inherited value cannot override them.
+                    export NIX_REMOTE=local
+                    export NIX_CONFIG="''${NIX_CONFIG:-}
+                    experimental-features = nix-command flakes
+                    sandbox = false
+                    build-users-group ="
+                    if ! nix-store --init 2>/dev/null; then
+                      printf 'Nix local store is unavailable; provide a writable /nix store (or NIX_CONFIG store) before installing profiles\n' >&2
+                      exit 1
+                    fi
 
-          workspace="''${COMFYUI_WORKSPACE:-/workspace}"
-          profile=""
-          manifest=""
-          resources=""
-          profileListen=""
-          profilePort=""
-          profileState=""
+                    index_file="$state/profile-index.json"
+                    locked_remote="$state/locked-flake"
+                    locked_revision="$state/locked-revision"
+                    resolve_index() {
+                      metadata=$(nix flake metadata "$remote" --json)
+                      printf '%s' "$metadata" > "$state/flake-metadata.json"
+                      python3 - "$state/flake-metadata.json" "$locked_remote" "$locked_revision" <<'PY'
+                    import json, pathlib, sys
 
-          case ''${1:-} in
-            profiles)
-              ${profileList}
-              ;;
-            install)
-              case ''${2:-} in
-                ${profileCases}
-                *)
-                  printf 'unknown profile: %s\n' "''${2:-}" >&2
-                  exit 2
-                  ;;
-              esac
-              [ -n "$profile" ] || {
-                printf 'unknown profile: %s\n' "''${2:-}" >&2
-                exit 2
-              }
-              mkdir -p "$workspace/models" "$workspace/workflows" "$workspace/custom_nodes" \
-                "$workspace/input" "$workspace/output" "$(dirname "$profileState")"
-              download-comfyui-models --manifest "$manifest" --root "$workspace/models"
-              cp -rn "$resources/workflows/." "$workspace/workflows/"
-              cp -rn "$resources/input/." "$workspace/input/"
-              cp -rn "$resources/custom_nodes/." "$workspace/custom_nodes/"
-              touch "$profileState"
-              printf 'installed %s\n' "$profile"
-              ;;
+                    metadata = json.load(open(sys.argv[1]))["locked"]
+                    if metadata["type"] != "github":
+                        raise SystemExit("NIX_COMFY_FLAKE must resolve to a GitHub flake")
+                    pathlib.Path(sys.argv[2]).write_text(
+                        f"github:{metadata['owner']}/{metadata['repo']}/{metadata['rev']}\n"
+                    )
+                    pathlib.Path(sys.argv[3]).write_text(metadata["rev"] + "\n")
+                    PY
+                      locked=$(<"$locked_remote")
+                      nix build "$locked#profile-index" --no-link --print-out-paths > "$state/index-path"
+                      index_path=$(<"$state/index-path")
+                      cp "$index_path" "$index_file"
+                    }
+                    profile_output() {
+                      python3 - "$index_file" "$1" <<'PY'
+          import json, sys
+          for item in json.load(open(sys.argv[1])):
+              if item["name"] == sys.argv[2]:
+                  print(item["output"])
+                  break
+          else:
+              raise SystemExit(1)
+          PY
+                    }
+                    case ''${1:-} in
+                      profiles)
+                        resolve_index
+                        python3 - "$index_file" <<'PY'
+          import json, sys
+          for item in json.load(open(sys.argv[1])): print(item["name"])
+          PY
+                        ;;
+                      install)
+                        [ -n "''${2:-}" ] || { printf 'usage: nix-comfy install <profile>\n' >&2; exit 2; }
+                        case "$2" in
+                          *[!A-Za-z0-9._-]*)
+                            printf 'invalid profile name: %s\n' "$2" >&2
+                            exit 2
+                            ;;
+                        esac
+                        resolve_index
+                        output=$(profile_output "$2") || { printf 'unknown profile: %s\n' "$2" >&2; exit 2; }
+                        locked=$(<"$locked_remote")
+                        revision=$(<"$locked_revision")
+                        built=$(nix build "$locked#$output" --no-link --print-out-paths)
+                        profiles_root="$workspace/profiles"
+                        mkdir -p "$profiles_root"
+                        temporary=$(mktemp -d "$profiles_root/.$2.XXXXXX")
+                        trap 'rm -rf "$temporary"' EXIT
+                        root="$temporary"
+                        mkdir -p "$root/models" "$root/workflows" "$root/custom_nodes" "$root/input" "$root/output"
+                        cp "$built/profile.json" "$root/profile.json"
+                        download=$(command -v download-comfyui-models || true)
+                        [ -n "$download" ] || { printf 'model downloader is missing from the image\n' >&2; exit 1; }
+                        "$download" --manifest "$built/profile.json" --root "$root/models"
+                        cp -rL "$built/workflows/." "$root/workflows/"
+                        cp -rL "$built/input/." "$root/input/"
+                        cp -rL "$built/custom_nodes/." "$root/custom_nodes/"
+                        printf '%s\n' "$revision" > "$root/.revision"
+                        touch "$root/.complete"
+                        rm -rf "$profiles_root/$2"
+                        mv "$root" "$profiles_root/$2"
+                        trap - EXIT
+                        printf 'installed %s at %s\n' "$2" "$revision"
+                        ;;
             start)
-              if [ -z "''${2:-}" ]; then
-                for candidate in ${profileNames}; do
-                  if [ -f "$workspace/.nix-comfy/$candidate" ]; then
-                    set -- start "$candidate"
-                    break
+              profile="''${2:-}"
+              case "$profile" in
+                ""|*[!A-Za-z0-9._-]*)
+                  if [ -n "$profile" ]; then
+                    printf 'invalid profile name: %s\n' "$profile" >&2
+                    exit 2
                   fi
-                done
-              fi
-              case ''${2:-} in
-                ${profileCases}
-                *)
-                  printf 'usage: nix-comfy start <profile> [comfyui arguments...]\n' >&2
-                  exit 2
                   ;;
               esac
-              [ -f "$profileState" ] || {
-                printf 'profile %s is not installed; run nix-comfy install %s\n' "$profile" "$profile" >&2
-                exit 1
-              }
-              ${runtimeEnvironment}
-              exec comfyui \
-                --listen "''${COMFYUI_LISTEN:-$profileListen}" \
-                --port "''${COMFYUI_PORT:-$profilePort}" \
-                --base-directory "$workspace" \
-                ${runtimeArgs} \
-                "''${@:3}"
-              ;;
-            status)
-              for profile in ${
-                pkgs.lib.escapeShellArg
-                (map (profile: profile.profileName) profilePackages)
-              }; do
-                if [ -f "$workspace/.nix-comfy/$profile" ]; then
-                  printf '%s: installed\n' "$profile"
-                else
-                  printf '%s: not installed\n' "$profile"
-                fi
-              done
-              ;;
-            *)
-              printf 'usage: nix-comfy {profiles|install <profile>|start <profile>|status}\n' >&2
-              exit 2
-              ;;
-          esac
-        '';
-      };
-      pinnedFlake = pkgs.linkFarm "comfyui-nix-flake-pinned" [
-        {
-          name = "opt/comfyui-nix-flake";
-          path = ../.;
-        }
-        {
-          name = "opt/nixpkgs";
-          path = inputs.nixpkgs;
-        }
-      ];
-      entrypoint = pkgs.writeShellApplication {
-        name = "comfyui-entrypoint";
-        runtimeInputs =
-          [ pkgs.bash pkgs.coreutils pkgs.comfyui downloadModels nixComfy ];
-        text = ''
-          set -euo pipefail
-
-          workspace="''${COMFYUI_WORKSPACE:-/workspace}"
-          mkdir -p "$workspace/models" "$workspace/workflows" "$workspace/custom_nodes" "$workspace/input" "$workspace/output"
-
-          ${runtimeEnvironment}
-
-          exec nix-comfy start "$@"
+              if [ -z "$profile" ]; then
+                          profiles=$(find "$workspace/profiles" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true)
+                          count=$(printf '%s\n' "$profiles" | sed '/^$/d' | wc -l)
+                          [ "$count" -eq 1 ] || { printf 'specify a profile; installed profiles: %s\n' "''${profiles:-none}" >&2; exit 2; }
+                          profile=$(basename "$profiles")
+                        fi
+                        root="$workspace/profiles/$profile"
+                        [ -f "$root/.complete" ] || { printf 'profile %s is not installed; run nix-comfy install %s\n' "$profile" "$profile" >&2; exit 1; }
+                        listen=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["runtime"].get("listen", "0.0.0.0"))' "$root/profile.json")
+                        port=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["runtime"].get("port", 8188))' "$root/profile.json")
+                        eval "$(python3 - "$root/profile.json" <<'PY'
+          import json, shlex, sys
+          p = json.load(open(sys.argv[1]))
+          for key, value in p["runtime"].get("environment", {}).items():
+              print("export %s=%s" % (key, shlex.quote(value)))
+          PY
+                        )"
+                        readarray -t extra_args < <(python3 -c 'import json,sys; print("\n".join(json.load(open(sys.argv[1]))["runtime"].get("extraArgs", [])))' "$root/profile.json")
+                        exec comfyui --listen "''${COMFYUI_LISTEN:-$listen}" --port "''${COMFYUI_PORT:-$port}" --base-directory "$root" "''${extra_args[@]}" "''${@:3}"
+                        ;;
+                      status)
+                        for root in "$workspace"/profiles/*; do
+                          [ -f "$root/.complete" ] || continue
+                          printf '%s: %s\n' "$(basename "$root")" "$(cat "$root/.revision" 2>/dev/null || printf 'unknown')"
+                        done
+                        ;;
+                      *) printf 'usage: nix-comfy {profiles|install <profile>|start [profile]|status}\n' >&2; exit 2 ;;
+                    esac
         '';
       };
       image = pkgs.dockerTools.buildLayeredImage {
@@ -212,10 +205,8 @@
           pkgs.python3
           pkgs.nix
           pkgs.git
-          pinnedFlake
-          downloadModels
-          nixComfy
-          entrypoint
+          downloader
+          profileList
         ];
         config = {
           Cmd = [ "${pkgs.coreutils}/bin/sleep" "infinity" ];
@@ -229,20 +220,15 @@
         };
       };
     in {
-      packages.default = pkgs.comfyui;
-      packages.comfyui = pkgs.comfyui;
-      packages.models = pkgs.writeText "models.json" manifest;
-      packages.workflows = workflows;
-      packages.input-assets = inputAssets;
-      packages.custom-nodes = customNodes;
-      packages.container = image;
-      packages.nix-comfy = nixComfy;
-
-      apps.default = {
-        type = "app";
-        program = "${entrypoint}/bin/comfyui-entrypoint";
+      packages = profileAttrs // {
+        default = pkgs.comfyui;
+        comfyui = pkgs.comfyui;
+        profile-index = profileIndex;
+        container = image;
+        nix-comfy = profileList;
+        models = pkgs.writeText "models.json"
+          (builtins.toJSON (profiles.compose profiles.selected).models);
       };
-
       formatter = pkgs.nixfmt-rfc-style;
     };
 }

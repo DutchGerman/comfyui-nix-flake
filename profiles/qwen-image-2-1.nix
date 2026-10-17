@@ -56,5 +56,12 @@
 
   customNodes = [ ];
 
+  # Dependency metadata is intentionally explicit.  Python dependencies for
+  # arbitrary custom nodes are not installed by the runtime yet.
+  dependencies = {
+    python = [ ];
+    customNodes = [ ];
+  };
+
   inputAssets = [ ];
 }
