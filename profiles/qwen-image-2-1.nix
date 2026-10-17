@@ -48,4 +48,6 @@
   ];
 
   customNodes = [ ];
+
+  inputAssets = [ ];
 }
