@@ -100,7 +100,7 @@ let
     version = "13.0.85";
     url =
       "https://files.pythonhosted.org/packages/c2/f3/d86c845465a2723ad7e1e5c36dcd75ddb82898b3f53be47ebd429fb2fa5d/nvidia_nvtx-13.0.85-py3-none-manylinux1_x86_64.manylinux_2_5_x86_64.whl";
-    hash = "sha256-STbR1ngPvmjbRU9ecqQv9k0f1jl+9fNjrnhpMP1cHNQ=";
+    hash = "sha256-STbR1ngPvmjbRU9ecqQv9k0f1jl9+fNjrnhpMP1cHNQ=";
   };
   cudaCublas = wheel {
     pname = "nvidia-cublas";
