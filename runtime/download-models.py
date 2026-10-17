@@ -6,6 +6,7 @@ import os
 import pathlib
 import shutil
 import tempfile
+import urllib.parse
 import urllib.request
 
 
@@ -25,10 +26,29 @@ def download(model, root):
         print(f"using {destination}")
         return
 
-    token_name = model.get("authEnv")
-    request = urllib.request.Request(model["url"])
-    if token_name and os.environ.get(token_name):
-        request.add_header("Authorization", f"Bearer {os.environ[token_name]}")
+    provider = model["provider"]
+    url = model["url"]
+    request = urllib.request.Request(url)
+    if provider == "huggingface":
+        token = os.environ.get("HF_TOKEN")
+        if token:
+            request.add_header("Authorization", f"Bearer {token}")
+    elif provider == "civitai":
+        token = os.environ.get("CIVITAI_TOKEN")
+        if token:
+            query = urllib.parse.parse_qsl(urllib.parse.urlsplit(url).query)
+            query.append(("token", token))
+            parts = urllib.parse.urlsplit(url)
+            url = urllib.parse.urlunsplit(
+                parts._replace(query=urllib.parse.urlencode(query))
+            )
+            request = urllib.request.Request(url)
+    elif provider == "url":
+        token_name = model.get("authEnv")
+        if token_name and os.environ.get(token_name):
+            request.add_header("Authorization", f"Bearer {os.environ[token_name]}")
+    else:
+        raise RuntimeError(f"unsupported model provider: {provider}")
 
     with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as temporary:
         temporary_path = pathlib.Path(temporary.name)
