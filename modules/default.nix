@@ -92,16 +92,16 @@
                       metadata=$(nix flake metadata "$remote" --json)
                       printf '%s' "$metadata" > "$state/flake-metadata.json"
                       python3 - "$state/flake-metadata.json" "$locked_remote" "$locked_revision" <<'PY'
-                    import json, pathlib, sys
+          import json, pathlib, sys
 
-                    metadata = json.load(open(sys.argv[1]))["locked"]
-                    if metadata["type"] != "github":
-                        raise SystemExit("NIX_COMFY_FLAKE must resolve to a GitHub flake")
-                    pathlib.Path(sys.argv[2]).write_text(
-                        f"github:{metadata['owner']}/{metadata['repo']}/{metadata['rev']}\n"
-                    )
-                    pathlib.Path(sys.argv[3]).write_text(metadata["rev"] + "\n")
-                    PY
+          metadata = json.load(open(sys.argv[1]))["locked"]
+          if metadata["type"] != "github":
+              raise SystemExit("NIX_COMFY_FLAKE must resolve to a GitHub flake")
+          pathlib.Path(sys.argv[2]).write_text(
+              f"github:{metadata['owner']}/{metadata['repo']}/{metadata['rev']}\n"
+          )
+          pathlib.Path(sys.argv[3]).write_text(metadata["rev"] + "\n")
+          PY
                       locked=$(<"$locked_remote")
                       nix build "$locked#profile-index" --no-link --print-out-paths > "$state/index-path"
                       index_path=$(<"$state/index-path")
