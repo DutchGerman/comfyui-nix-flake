@@ -74,7 +74,9 @@ with arguments.manifest.open() as manifest_file:
 for model in manifest:
     try:
         download(model, arguments.root)
-    except Exception:
+    except Exception as error:
         if model.get("required", True):
-            raise
-        print(f"skipping optional model {model['name']}")
+            raise RuntimeError(
+                f"required model failed: {model['name']}: {error}"
+            ) from error
+        print(f"skipping optional model {model['name']}", flush=True)
