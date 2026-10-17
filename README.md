@@ -20,7 +20,7 @@ nix build .#container
 
 The result is an OCI image archive. Import it with Docker or Podman and run it with an NVIDIA GPU and a persistent volume mounted at `/workspace`.
 
-The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, Git, CUDA-enabled ComfyUI using pinned official PyTorch CUDA wheels, the checksum downloader, and a generic runtime CLI, but no repository profiles or model weights. The single-GPU runtime does not build or enable NCCL distributed support. The default container command keeps the pod alive for SSH access:
+The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, Git, Nushell, CUDA-enabled ComfyUI using pinned official PyTorch CUDA wheels, the checksum downloader, and a generic runtime CLI, but no repository profiles or model weights. The single-GPU runtime does not build or enable NCCL distributed support. The default container command keeps the pod alive for SSH access:
 
 ```sh
 docker run --gpus all -p 8188:8188 -v comfyui-workspace:/workspace \
@@ -36,7 +36,7 @@ nix-comfy status
 nix-comfy start qwen-image-2-1-t2i
 ```
 
-`nix-comfy` resolves the latest `github:DutchGerman/comfyui-nix-flake/master` profile index, builds that profile output with Nix, records its locked Git revision, and installs it below `/workspace/profiles/<profile>`. Thus adding or changing a profile does not rebuild the base OCI image. `profiles` always queries the remote index; use a profile revision shown by `status` when auditing an installation.
+`nix-comfy` is implemented as a Nushell script packaged by the Nix runtime module. It resolves the latest `github:DutchGerman/comfyui-nix-flake/master` profile index, builds that profile output with Nix, records its locked Git revision, and installs it below `/workspace/profiles/<profile>`. Thus adding or changing a profile does not rebuild the base OCI image. `profiles` always queries the remote index; use a profile revision shown by `status` when auditing an installation.
 
 The container workflow ignores profile-only changes. `.github/workflows/profiles.yml` evaluates and builds profile outputs instead. After the first publish, set the GHCR package visibility to **Public** in the package settings so Runpod can pull it without registry credentials.
 
