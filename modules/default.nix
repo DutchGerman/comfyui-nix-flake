@@ -97,6 +97,7 @@
       packages.models = pkgs.writeText "models.json" manifest;
       packages.workflows = workflows;
       packages.input-assets = inputAssets;
+      packages.custom-nodes = customNodes;
       packages.container = image;
 
       apps.default = {
