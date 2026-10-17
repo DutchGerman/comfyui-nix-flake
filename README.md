@@ -32,11 +32,11 @@ New modules should follow the same shape:
   name = "my-module";
   models = [
     {
+      provider = "huggingface";
       name = "model.safetensors";
       directory = "checkpoints";
       url = "https://example.invalid/model.safetensors";
       sha256 = "...";
-      authEnv = "HF_TOKEN";
       required = true;
     }
   ];
@@ -44,6 +44,12 @@ New modules should follow the same shape:
     {
       name = "my-workflow.json";
       source = pkgs.fetchurl { url = "..."; hash = "..."; };
+    }
+  ];
+  inputAssets = [
+    {
+      name = "reference.png";
+      source = ./assets/reference.png;
     }
   ];
   customNodes = [
@@ -56,10 +62,19 @@ New modules should follow the same shape:
       };
     }
   ];
+  runtime = {
+    port = 8188;
+    extraArgs = [ ];
+    environment = { };
+  };
 }
 ```
 
-The current MVP composes the reference module into the default image. Add another profile to `profiles/default.nix` and include it in `selected` to compose additional modules.
+Model entries must declare `provider` as `huggingface`, `civitai`, or `url`. Hugging Face uses `HF_TOKEN`, CivitAI uses `CIVITAI_TOKEN`, and direct URLs may set `authEnv` for generic Bearer authentication. Every model requires a 64-character SHA-256 checksum. Required download failures stop startup; optional failures are logged and skipped.
+
+Input assets are immutable Nix inputs copied to `/workspace/input`. Workflows and custom nodes are also pinned into the image/store. Duplicate resource names and conflicting runtime settings fail during Nix evaluation rather than being overwritten.
+
+The current MVP composes the reference module into the default image. Add another profile to `profiles/default.nix` and include it in `selected` to compose additional modules. Runtime settings are limited to ComfyUI's listen address, port, extra CLI arguments, and environment variables.
 
 ## Credentials
 
@@ -74,6 +89,8 @@ Mount persistent storage at `/workspace`. The entrypoint creates:
 - `/workspace/custom_nodes`
 - `/workspace/input`
 - `/workspace/output`
+
+The container accepts `HF_TOKEN`, `CIVITAI_TOKEN`, `COMFYUI_WORKSPACE`, `COMFYUI_LISTEN`, and `COMFYUI_PORT` at runtime. It targets a persistent Runpod Pod with HTTP port `8188`; Serverless handlers and application-level authentication are out of scope.
 
 The Qwen Image 2.1 example needs substantial model storage. Plan for at least 50 GB for the initial profile and container overhead.
 
