@@ -23,6 +23,7 @@ def resolve-index [remote: string, indexFile: string, lockedRemote: string, lock
   $"($locked.rev)\n" | save -f $lockedRevision
 
   let indexPath = (run-command "nix" ["build", $"github:($locked.owner)/($locked.repo)/($locked.rev)#profile-index", "--no-link", "--print-out-paths"])
+  rm -f $indexFile
   cp $indexPath $indexFile
 }
 
@@ -84,7 +85,7 @@ def main [...args: string] {
       let built = (run-command "nix" ["build", $"($locked)#($output)", "--no-link", "--print-out-paths"])
       let profilesRoot = ($workspace | path join "profiles")
       mkdir $profilesRoot
-      let temporary = (mktemp -d ($profilesRoot | path join $".($profile).XXXXXX"))
+      let temporary = (mktemp -d -p $profilesRoot $".($profile).XXXXXX")
       try {
         let root = $temporary
         mkdir ($root | path join "models") ($root | path join "workflows") ($root | path join "custom_nodes") ($root | path join "input") ($root | path join "output")
