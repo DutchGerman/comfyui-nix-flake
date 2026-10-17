@@ -18,9 +18,11 @@ jobs:
   container:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: DeterminateSystems/nix-installer-action@v16
-      - uses: DeterminateSystems/magic-nix-cache-action@v8
+      - uses: actions/checkout@v5
+      - uses: DeterminateSystems/nix-installer-action@v23
+        with:
+          determinate: false
+      - uses: DeterminateSystems/magic-nix-cache-action@v15
         with:
           use-flakehub: false
       - name: Build OCI image
