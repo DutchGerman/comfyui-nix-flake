@@ -5,22 +5,19 @@
     jail-nix.url = "sourcehut:~alexdavid/jail.nix";
   };
 
-  outputs =
-    inputs@{ flake-parts, ... }:
+  outputs = inputs@{ flake-parts, ... }:
     flake-parts.lib.mkFlake { inherit inputs; } {
       systems = [ "x86_64-linux" ];
-      imports = [
-        ./modules
-        ./tools/agents
-      ];
+      imports = [ ./modules ./tools/agents ];
 
-      perSystem =
-        { system, ... }:
-        {
-          _module.args.pkgs = import inputs.nixpkgs {
-            inherit system;
-            config.allowUnfree = true;
+      perSystem = { system, ... }: {
+        _module.args.pkgs = import inputs.nixpkgs {
+          inherit system;
+          config = {
+            allowUnfree = true;
+            cudaSupport = true;
           };
         };
+      };
     };
 }
