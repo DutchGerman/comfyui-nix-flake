@@ -20,7 +20,7 @@ nix build .#container
 
 The result is an OCI image archive. Import it with Docker or Podman and run it with an NVIDIA GPU and a persistent volume mounted at `/workspace`.
 
-The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, Git, CUDA-enabled ComfyUI using nixpkgs' prebuilt CUDA PyTorch wheels, the checksum downloader, and a generic runtime CLI, but no repository profiles or model weights. The single-GPU runtime does not build or enable NCCL distributed support. The default container command keeps the pod alive for SSH access:
+The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, Git, CUDA-enabled ComfyUI using pinned official PyTorch CUDA wheels, the checksum downloader, and a generic runtime CLI, but no repository profiles or model weights. The single-GPU runtime does not build or enable NCCL distributed support. The default container command keeps the pod alive for SSH access:
 
 ```sh
 docker run --gpus all -p 8188:8188 -v comfyui-workspace:/workspace \

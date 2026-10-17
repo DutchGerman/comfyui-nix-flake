@@ -16,17 +16,51 @@
             inherit system;
             config = {
               allowUnfree = true;
-              cudaSupport = true;
             };
           };
-          cudaPython = basePkgs.python3.override {
+          pythonPackages = basePkgs.python313Packages;
+          torch = pythonPackages.buildPythonPackage {
+            pname = "torch";
+            version = "2.12.1+cu130";
+            format = "wheel";
+            src = basePkgs.fetchurl {
+              url = "https://download-r2.pytorch.org/whl/cu130/torch-2.12.1%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl";
+              hash = "sha256-1eGEBELSGClXs9L3eMwyXJD6XLQqqLGslJ8CnpvdfwY=";
+            };
+            dependencies = with pythonPackages; [
+              filelock
+              fsspec
+              jinja2
+              networkx
+              sympy
+              typing-extensions
+            ];
+            passthru.cudaSupport = true;
+            pythonImportsCheck = [ "torch" ];
+          };
+          torchvision = pythonPackages.buildPythonPackage {
+            pname = "torchvision";
+            version = "0.27.1+cu130";
+            format = "wheel";
+            src = basePkgs.fetchurl {
+              url = "https://download-r2.pytorch.org/whl/cu130/torchvision-0.27.1%2Bcu130-cp313-cp313-manylinux_2_28_x86_64.whl";
+              hash = "sha256-+fAI1LGy8BPq977Bqf8iEmNYHXdmjU4eDpw+01HVZGU=";
+            };
+            dependencies = with pythonPackages; [
+              numpy
+              pillow
+              torch
+            ];
+            passthru.cudaSupport = true;
+            pythonImportsCheck = [ "torchvision" ];
+          };
+          cudaPython = basePkgs.python313.override {
             packageOverrides = final: prev: {
-              # Use nixpkgs' CUDA wheels instead of compiling PyTorch and NCCL.
-              torch = prev."torch-bin";
-              torchvision = prev."torchvision-bin";
+              inherit torch torchvision;
             };
           };
           pkgs = basePkgs // {
+            python3 = cudaPython;
             comfyui = basePkgs.comfyui.override { python3 = cudaPython; };
           };
         in {
