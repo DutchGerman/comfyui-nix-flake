@@ -21,6 +21,6 @@
           default = pkgs.comfyui;
           comfyui = pkgs.comfyui;
         };
-      formatter = pkgs.nixfmt-rfc-style;
+      formatter = pkgs.nixfmt;
     };
 }
