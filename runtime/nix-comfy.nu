@@ -130,7 +130,6 @@ def main [...args: string] {
         $error | print -e
         exit 1
       }
-      rm -rf $temporary
       print $"installed ($profile) at ($revision)"
     }
     "start" => {
