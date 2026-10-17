@@ -5,6 +5,9 @@ on:
     branches: [master, main]
     paths-ignore:
       - 'profiles/**'
+  pull_request:
+    paths-ignore:
+      - 'profiles/**'
   workflow_dispatch:
 
 permissions:

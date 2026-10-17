@@ -22,6 +22,11 @@
             path = pkgs.writeText "${name}-profile.json" json;
           }
           {
+            name = "models.json";
+            path = pkgs.writeText "${name}-models.json"
+              (builtins.toJSON composed.models);
+          }
+          {
             name = "workflows";
             path = farm "${name}-workflows" composed.workflows;
           }
@@ -136,22 +141,27 @@
                         built=$(nix build "$locked#$output" --no-link --print-out-paths)
                         profiles_root="$workspace/profiles"
                         mkdir -p "$profiles_root"
-                        temporary=$(mktemp -d "$profiles_root/.$2.XXXXXX")
-                        trap 'rm -rf "$temporary"' EXIT
+              temporary=$(mktemp -d "$profiles_root/.$2.XXXXXX")
+              trap 'rm -rf "$temporary"' EXIT
                         root="$temporary"
                         mkdir -p "$root/models" "$root/workflows" "$root/custom_nodes" "$root/input" "$root/output"
                         cp "$built/profile.json" "$root/profile.json"
                         download=$(command -v download-comfyui-models || true)
                         [ -n "$download" ] || { printf 'model downloader is missing from the image\n' >&2; exit 1; }
-                        "$download" --manifest "$built/profile.json" --root "$root/models"
+              "$download" --manifest "$built/models.json" --root "$root/models"
                         cp -rL "$built/workflows/." "$root/workflows/"
                         cp -rL "$built/input/." "$root/input/"
-                        cp -rL "$built/custom_nodes/." "$root/custom_nodes/"
-                        printf '%s\n' "$revision" > "$root/.revision"
-                        touch "$root/.complete"
-                        rm -rf "$profiles_root/$2"
-                        mv "$root" "$profiles_root/$2"
-                        trap - EXIT
+              cp -rL "$built/custom_nodes/." "$root/custom_nodes/"
+              printf '%s\n' "$revision" > "$root/.revision"
+              touch "$root/.complete"
+              current="$profiles_root/$2"
+              if [ -d "$current" ] && [ ! -L "$current" ]; then
+                mv "$current" "$profiles_root/.$2.legacy.$RANDOM"
+              fi
+              rm -f "$profiles_root/.$2.next"
+              ln -s "$(basename "$temporary")" "$profiles_root/.$2.next"
+              mv -Tf "$profiles_root/.$2.next" "$current"
+              trap - EXIT
                         printf 'installed %s at %s\n' "$2" "$revision"
                         ;;
             start)
@@ -165,7 +175,7 @@
                   ;;
               esac
               if [ -z "$profile" ]; then
-                          profiles=$(find "$workspace/profiles" -mindepth 1 -maxdepth 1 -type d 2>/dev/null || true)
+                profiles=$(find "$workspace/profiles" -mindepth 1 -maxdepth 1 -type l 2>/dev/null || true)
                           count=$(printf '%s\n' "$profiles" | sed '/^$/d' | wc -l)
                           [ "$count" -eq 1 ] || { printf 'specify a profile; installed profiles: %s\n' "''${profiles:-none}" >&2; exit 2; }
                           profile=$(basename "$profiles")

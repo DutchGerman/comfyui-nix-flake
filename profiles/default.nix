@@ -1,7 +1,8 @@
 { pkgs }:
 let
   qwenImage = import ./qwen-image-2-1.nix { inherit pkgs; };
-  selectedProfiles = [ qwenImage ];
+  availableProfiles = [ qwenImage ];
+  selectedProfiles = availableProfiles;
 
   resourceNames = resources: map (resource: resource.name) resources;
   unique = label: names:
@@ -70,7 +71,10 @@ let
 in {
   inherit qwenImage;
 
-  available = [ qwenImage ];
+  available = assert unique "profile"
+    (map (profile: profile.installName or profile.name) availableProfiles)
+    == map (profile: profile.installName or profile.name) availableProfiles;
+    availableProfiles;
 
   selected = selectedProfiles;
 

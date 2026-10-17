@@ -116,7 +116,7 @@ Model entries must declare `provider` as `huggingface`, `civitai`, or `url`. Hug
 
 Input assets are immutable Nix inputs copied into the installed profile. Workflows and custom nodes are pinned into the profile output/store and copied into persistent profile storage. Duplicate resource names and conflicting runtime settings fail during Nix evaluation rather than being overwritten.
 
-Each profile is exposed as `.#profile-<installName>` and `.#profile-index`. A profile output contains `profile.json`, workflows, input assets, and custom nodes; model weights are downloaded only during `install`. Add a profile to `profiles/default.nix` and `available` and set `installName` to define its CLI name. Dependency metadata (`dependencies.python` and `dependencies.customNodes`) is recorded, but arbitrary custom-node Python dependencies are not installed by this MVP.
+Each profile is exposed as `.#profile-<installName>` and `.#profile-index`. A profile output contains `profile.json`, `models.json`, workflows, input assets, and custom nodes; model weights are downloaded only during `install`. Add a profile to `profiles/default.nix` and `available` and set `installName` to define its CLI name. Dependency metadata (`dependencies.python` and `dependencies.customNodes`) is recorded, but arbitrary custom-node Python dependencies are not installed by this MVP.
 
 ## Credentials
 
