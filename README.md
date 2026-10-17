@@ -20,6 +20,45 @@ nix build .#container
 
 The result is an OCI image archive. Import it with Docker or Podman and run it with an NVIDIA GPU and a persistent volume mounted at `/workspace`.
 
+The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, the repository source and pinned nixpkgs input, CUDA-enabled ComfyUI, and the runtime CLI, but no model weights. The default container command keeps the pod alive for SSH access:
+
+```sh
+docker run --gpus all -p 8188:8188 -v comfyui-workspace:/workspace \
+  ghcr.io/dutchgerman/comfyui-nix-flake:latest
+```
+
+From the pod, install the profile once and start ComfyUI in the foreground:
+
+```sh
+nix-comfy profiles
+nix-comfy install qwen-image-2-1-t2i
+nix-comfy status
+nix-comfy start qwen-image-2-1-t2i
+```
+
+The GitHub Actions workflow at `.github/workflows/container.yml` builds `.#container`, logs into GHCR with `GITHUB_TOKEN`, and publishes both `latest` and the commit SHA tag. After the first publish, set the GHCR package visibility to **Public** in the package settings so Runpod can pull it without registry credentials.
+
+### Runpod Pod
+
+Create a CUDA-enabled GPU Pod using the published image. Configure:
+
+- Container image: `ghcr.io/dutchgerman/comfyui-nix-flake:latest`
+- Persistent volume mounted at `/workspace`
+- At least 50 GB of volume storage
+- HTTP port `8188`
+- Optional runtime secret: `HF_TOKEN`
+
+After connecting to the Pod terminal over SSH:
+
+```sh
+nix-comfy profiles
+nix-comfy install qwen-image-2-1-t2i
+nix-comfy status
+nix-comfy start qwen-image-2-1-t2i
+```
+
+Keep the Pod running while ComfyUI is in use. Open the Runpod HTTP service for port `8188`; the workflow is installed at `/workspace/workflows/qwen-image-2-1-t2i.json` and generated images are written to `/workspace/output`.
+
 ## Modules
 
 The reference module is `profiles/qwen-image-2-1.nix`. It declares models and workflows without embedding model files in the repository.
@@ -74,7 +113,7 @@ Model entries must declare `provider` as `huggingface`, `civitai`, or `url`. Hug
 
 Input assets are immutable Nix inputs copied to `/workspace/input`. Workflows and custom nodes are also pinned into the image/store. Duplicate resource names and conflicting runtime settings fail during Nix evaluation rather than being overwritten.
 
-The current MVP composes the reference module into the default image. Add another profile to `profiles/default.nix` and include it in `selected` to compose additional modules. Runtime settings are limited to ComfyUI's listen address, port, extra CLI arguments, and environment variables.
+The current MVP exposes the reference profile through the runtime CLI. Add another profile to `profiles/default.nix` and `available` to make it installable; set its `installName` to define the CLI name. Runtime settings are limited to ComfyUI's listen address, port, extra CLI arguments, and environment variables.
 
 ## Credentials
 
