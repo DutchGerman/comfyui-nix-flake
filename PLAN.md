@@ -12,7 +12,7 @@ The repository lets users define modules containing models, workflows, custom no
 - NVIDIA CUDA on x86_64-linux
 - Runpod-compatible OCI image
 - Persistent `/workspace` storage
-- Runtime model downloads
+- Runtime profile builds and model downloads
 - Hugging Face, CivitAI, and direct URL sources
 - Declaratively pinned custom nodes
 - Sandboxed OpenCode, Codex, and Claude development tools
@@ -24,7 +24,7 @@ Modules declare models, destination directories, URLs, checksums, credentials, w
 
 ## First Example
 
-The Qwen Image 2.1 module provides the official text-to-image workflow and its INT8 diffusion model, text encoder, VAE, and optional prompt enhancer. Model files remain outside Git and download to persistent storage at startup.
+The Qwen Image 2.1 module provides the official text-to-image workflow and its INT8 diffusion model, text encoder, VAE, and optional prompt enhancer. Model files remain outside Git and download to persistent storage during profile installation.
 
 ## Implementation Phases
 
@@ -34,9 +34,10 @@ The Qwen Image 2.1 module provides the official text-to-image workflow and its I
 4. Define the model, workflow, and custom-node module interface.
 5. Implement checksum-verified runtime model downloads.
 6. Add the Qwen Image 2.1 example module.
-7. Add the Runpod OCI image.
-8. Validate flake outputs and startup configuration.
-9. Document how users create and compose modules.
+7. Add the generic Runpod OCI image.
+8. Add independently buildable runtime profile outputs.
+9. Validate profile installation and runtime configuration.
+10. Document how users create and compose modules.
 
 ## Acceptance Criteria
 

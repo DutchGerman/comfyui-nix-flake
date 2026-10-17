@@ -2,7 +2,7 @@
 
 Modular Nix packaging for ComfyUI deployments.
 
-This repository is a framework for composing ComfyUI installations from modules. A module can provide model downloads, workflows, custom nodes, and runtime configuration. Model weights are downloaded at startup into persistent storage and are not stored in Git or the Nix store.
+This repository is a framework for composing ComfyUI installations from modules. A module can provide model downloads, workflows, custom nodes, and runtime configuration. Model weights are downloaded during profile installation into persistent storage and are not stored in Git or the Nix store.
 
 ## Quick Start
 
@@ -20,7 +20,7 @@ nix build .#container
 
 The result is an OCI image archive. Import it with Docker or Podman and run it with an NVIDIA GPU and a persistent volume mounted at `/workspace`.
 
-The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, the repository source and pinned nixpkgs input, CUDA-enabled ComfyUI, and the runtime CLI, but no model weights. The default container command keeps the pod alive for SSH access:
+The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, Git, CUDA-enabled ComfyUI, the checksum downloader, and a generic runtime CLI, but no repository profiles or model weights. The default container command keeps the pod alive for SSH access:
 
 ```sh
 docker run --gpus all -p 8188:8188 -v comfyui-workspace:/workspace \
@@ -36,7 +36,9 @@ nix-comfy status
 nix-comfy start qwen-image-2-1-t2i
 ```
 
-The GitHub Actions workflow at `.github/workflows/container.yml` builds `.#container`, logs into GHCR with `GITHUB_TOKEN`, and publishes both `latest` and the commit SHA tag. After the first publish, set the GHCR package visibility to **Public** in the package settings so Runpod can pull it without registry credentials.
+`nix-comfy` resolves the latest `github:DutchGerman/comfyui-nix-flake/master` profile index, builds that profile output with Nix, records its locked Git revision, and installs it below `/workspace/profiles/<profile>`. Thus adding or changing a profile does not rebuild the base OCI image. `profiles` always queries the remote index; use a profile revision shown by `status` when auditing an installation.
+
+The container workflow ignores profile-only changes. `.github/workflows/profiles.yml` evaluates and builds profile outputs instead. After the first publish, set the GHCR package visibility to **Public** in the package settings so Runpod can pull it without registry credentials.
 
 ### Runpod Pod
 
@@ -44,7 +46,8 @@ Create a CUDA-enabled GPU Pod using the published image. Configure:
 
 - Container image: `ghcr.io/dutchgerman/comfyui-nix-flake:latest`
 - Persistent volume mounted at `/workspace`
-- At least 50 GB of volume storage
+- 30 GB container disk
+- 100 GB persistent volume mounted at `/workspace`
 - HTTP port `8188`
 - Optional runtime secret: `HF_TOKEN`
 
@@ -57,7 +60,7 @@ nix-comfy status
 nix-comfy start qwen-image-2-1-t2i
 ```
 
-Keep the Pod running while ComfyUI is in use. Open the Runpod HTTP service for port `8188`; the workflow is installed at `/workspace/workflows/qwen-image-2-1-t2i.json` and generated images are written to `/workspace/output`.
+Keep the Pod running while ComfyUI is in use. Open the Runpod HTTP service for port `8188`; the workflow is installed at `/workspace/profiles/qwen-image-2-1-t2i/workflows/qwen-image-2-1-t2i.json` and generated images are written to that profile's `output` directory.
 
 ## Modules
 
@@ -109,11 +112,11 @@ New modules should follow the same shape:
 }
 ```
 
-Model entries must declare `provider` as `huggingface`, `civitai`, or `url`. Hugging Face uses `HF_TOKEN`, CivitAI uses `CIVITAI_TOKEN`, and direct URLs may set `authEnv` for generic Bearer authentication. Every model requires a 64-character SHA-256 checksum. Required download failures stop startup; optional failures are logged and skipped.
+Model entries must declare `provider` as `huggingface`, `civitai`, or `url`. Hugging Face uses `HF_TOKEN`, CivitAI uses `CIVITAI_TOKEN`, and direct URLs may set `authEnv` for generic Bearer authentication. Every model requires a 64-character SHA-256 checksum. Required download failures stop installation; optional failures are logged and skipped.
 
-Input assets are immutable Nix inputs copied to `/workspace/input`. Workflows and custom nodes are also pinned into the image/store. Duplicate resource names and conflicting runtime settings fail during Nix evaluation rather than being overwritten.
+Input assets are immutable Nix inputs copied into the installed profile. Workflows and custom nodes are pinned into the profile output/store and copied into persistent profile storage. Duplicate resource names and conflicting runtime settings fail during Nix evaluation rather than being overwritten.
 
-The current MVP exposes the reference profile through the runtime CLI. Add another profile to `profiles/default.nix` and `available` to make it installable; set its `installName` to define the CLI name. Runtime settings are limited to ComfyUI's listen address, port, extra CLI arguments, and environment variables.
+Each profile is exposed as `.#profile-<installName>` and `.#profile-index`. A profile output contains `profile.json`, workflows, input assets, and custom nodes; model weights are downloaded only during `install`. Add a profile to `profiles/default.nix` and `available` and set `installName` to define its CLI name. Dependency metadata (`dependencies.python` and `dependencies.customNodes`) is recorded, but arbitrary custom-node Python dependencies are not installed by this MVP.
 
 ## Credentials
 
@@ -121,17 +124,21 @@ Set credentials only at runtime. Supported model manifests can reference an envi
 
 ## Storage
 
-Mount persistent storage at `/workspace`. The entrypoint creates:
+Mount persistent storage at `/workspace`. Profiles are isolated under:
 
-- `/workspace/models`
-- `/workspace/workflows`
-- `/workspace/custom_nodes`
-- `/workspace/input`
-- `/workspace/output`
+- `/workspace/profiles/<profile>/models`
+- `/workspace/profiles/<profile>/workflows`
+- `/workspace/profiles/<profile>/custom_nodes`
+- `/workspace/profiles/<profile>/input`
+- `/workspace/profiles/<profile>/output`
 
 The container accepts `HF_TOKEN`, `CIVITAI_TOKEN`, `COMFYUI_WORKSPACE`, `COMFYUI_LISTEN`, and `COMFYUI_PORT` at runtime. It targets a persistent Runpod Pod with HTTP port `8188`; Serverless handlers and application-level authentication are out of scope.
 
-The Qwen Image 2.1 example needs substantial model storage. Plan for at least 50 GB for the initial profile and container overhead.
+The Qwen Image 2.1 example needs substantial model storage. Plan for the 100 GB persistent volume; the 30 GB container disk must also retain the Nix store created by runtime profile builds.
+
+The image runs Nix as a root-capable single-user local-store setup: `nix-comfy` sets `sandbox = false` and an empty build-users group because Runpod does not provide NixOS/systemd or a daemon. The image's writable `/nix` layer is required for `nix build`; mount or persist it if the platform resets the container layer. This is deliberately explicit rather than pretending a daemon-backed store is available.
+
+The MVP tracks revisions at install time but follows the moving `master` ref for the next install. There is no separate `update` command; reinstalling refreshes a profile. `start` with no profile is allowed only when exactly one profile is installed.
 
 ## Licensing
 
