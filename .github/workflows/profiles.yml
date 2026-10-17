@@ -1,0 +1,29 @@
+name: Validate profiles
+
+on:
+  push:
+    branches: [master, main]
+    paths: ['profiles/**', 'modules/**', 'flake.nix', 'flake.lock']
+  pull_request:
+    paths: ['profiles/**', 'modules/**', 'flake.nix', 'flake.lock']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  profiles:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: DeterminateSystems/nix-installer-action@v16
+      - uses: DeterminateSystems/magic-nix-cache-action@v8
+        with:
+          use-flakehub: false
+      - name: Evaluate flake and build profile metadata
+        run: |
+          nix flake check
+          nix build .#profile-index --out-link profile-index
+          while read -r output; do
+            nix build ".#$output"
+          done < <(python3 -c 'import json; print("\n".join(item["output"] for item in json.load(open("profile-index"))))')
