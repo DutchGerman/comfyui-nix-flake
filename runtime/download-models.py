@@ -23,7 +23,7 @@ def download(model, root):
     destination.parent.mkdir(parents=True, exist_ok=True)
 
     if destination.exists() and checksum(destination) == model["sha256"]:
-        print(f"using {destination}")
+        print(f"using {destination}", flush=True)
         return
 
     provider = model["provider"]
@@ -53,7 +53,7 @@ def download(model, root):
     with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as temporary:
         temporary_path = pathlib.Path(temporary.name)
         try:
-            print(f"downloading {model['name']}")
+            print(f"downloading {model['name']}", flush=True)
             with urllib.request.urlopen(request) as response:
                 shutil.copyfileobj(response, temporary)
             if checksum(temporary_path) != model["sha256"]:

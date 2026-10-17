@@ -4,15 +4,28 @@ def fail [message: string, code: int = 1] {
 }
 
 def run-command [command: string, args: list<string>] {
-  let result = (do { ^$command ...$args } | complete)
-  if $result.exit_code != 0 {
-    print -e $result.stderr
-    exit $result.exit_code
+  try {
+    let output = (do { ^$command ...$args })
+    $output | str trim
+  } catch { |error|
+    let code = ($error.exit_code? | default 1)
+    print -e $"($command) failed with exit code ($code)"
+    exit $code
   }
-  $result.stdout | str trim
+}
+
+def run-streaming [command: string, args: list<string>] {
+  try {
+    ^$command ...$args
+  } catch { |error|
+    let code = ($error.exit_code? | default 1)
+    print -e $"($command) failed with exit code ($code)"
+    exit $code
+  }
 }
 
 def resolve-index [remote: string, indexFile: string, lockedRemote: string, lockedRevision: string] {
+  print "resolving flake revision"
   let metadata = (run-command "nix" ["flake", "metadata", $remote, "--json"] | from json)
   if $metadata.locked.type != "github" {
     fail "NIX_COMFY_FLAKE must resolve to a GitHub flake"
@@ -22,6 +35,7 @@ def resolve-index [remote: string, indexFile: string, lockedRemote: string, lock
   $"github:($locked.owner)/($locked.repo)/($locked.rev)\n" | save -f $lockedRemote
   $"($locked.rev)\n" | save -f $lockedRevision
 
+  print "building profile index"
   let indexPath = (run-command "nix" ["build", $"github:($locked.owner)/($locked.repo)/($locked.rev)#profile-index", "--no-link", "--print-out-paths"])
   rm -f $indexFile
   cp $indexPath $indexFile
@@ -59,8 +73,9 @@ def main [...args: string] {
 
   let command = ($args | get 0? | default "")
   if $command in ["profiles", "install"] {
-    let init = (do { ^nix-store --init } | complete)
-    if $init.exit_code != 0 {
+    try {
+      ^nix-store --init
+    } catch {
       fail "Nix local store is unavailable; provide a writable /nix store (or NIX_CONFIG store) before installing profiles"
     }
   }
@@ -82,6 +97,7 @@ def main [...args: string] {
       let output = (profile-output $indexFile $profile)
       let locked = (open $lockedRemote | str trim)
       let revision = (open $lockedRevision | str trim)
+      print $"building profile ($profile)"
       let built = (run-command "nix" ["build", $"($locked)#($output)", "--no-link", "--print-out-paths"])
       let profilesRoot = ($workspace | path join "profiles")
       mkdir $profilesRoot
@@ -94,7 +110,9 @@ def main [...args: string] {
         if ($download | is-empty) {
           fail "model downloader is missing from the image"
         }
-        run-command $download ["--manifest", ($built | path join "models.json"), "--root", ($root | path join "models")] | ignore
+        print "downloading models"
+        run-streaming $download ["--manifest", ($built | path join "models.json"), "--root", ($root | path join "models")]
+        print "installing profile assets"
         ^cp -rL ($built | path join "workflows" ".") ($root | path join "workflows")
         ^cp -rL ($built | path join "input" ".") ($root | path join "input")
         ^cp -rL ($built | path join "custom_nodes" ".") ($root | path join "custom_nodes")
