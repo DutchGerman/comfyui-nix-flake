@@ -24,6 +24,15 @@
           path = customNode.source;
         }) composed.customNodes
       );
+      runtimeEnvironment = pkgs.lib.concatStringsSep "\n" (
+        pkgs.lib.mapAttrsToList (
+          name: value: ''
+            : "''${${name}:=${pkgs.lib.escapeShellArg value}}"
+            export ${name}
+          ''
+        ) composed.runtime.environment
+      );
+      runtimeArgs = pkgs.lib.concatMapStringsSep " " pkgs.lib.escapeShellArg composed.runtime.extraArgs;
       downloadModels = pkgs.writeShellApplication {
         name = "download-comfyui-models";
         runtimeInputs = [ pkgs.python3 ];
@@ -40,6 +49,8 @@
           workspace="''${COMFYUI_WORKSPACE:-/workspace}"
           mkdir -p "$workspace/models" "$workspace/workflows" "$workspace/custom_nodes" "$workspace/input" "$workspace/output"
 
+          ${runtimeEnvironment}
+
           download-comfyui-models \
             --manifest ${pkgs.writeText "models.json" manifest} \
             --root "$workspace/models"
@@ -49,9 +60,10 @@
           cp -rn ${customNodes}/. "$workspace/custom_nodes/"
 
           exec comfyui \
-            --listen "''${COMFYUI_LISTEN:-0.0.0.0}" \
-            --port "''${COMFYUI_PORT:-8188}" \
+            --listen "''${COMFYUI_LISTEN:-${composed.runtime.listen}}" \
+            --port "''${COMFYUI_PORT:-${toString composed.runtime.port}}" \
             --base-directory "$workspace" \
+            ${runtimeArgs} \
             "$@"
         '';
       };
