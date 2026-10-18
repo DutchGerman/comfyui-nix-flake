@@ -22,6 +22,7 @@ let
         "HOME=/workspace/home"
         "COMFYUI_WORKSPACE=/workspace"
         "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
+        "LD_LIBRARY_PATH=/usr/lib/x86_64-linux-gnu"
       ];
       ExposedPorts = { "8188/tcp" = { }; };
       WorkingDir = "/workspace";
