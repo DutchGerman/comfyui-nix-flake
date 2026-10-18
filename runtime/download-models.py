@@ -54,6 +54,7 @@ def download(model, root):
 
     provider = model["provider"]
     url = model["url"]
+    request = urllib.request.Request(url)
     if provider == "huggingface":
         token = os.environ.get("HF_TOKEN")
         repo_id, filename, revision = huggingface_reference(model)
@@ -129,6 +130,8 @@ def download(model, root):
                     print(f"{prefix}{message}", file=sys.stderr, flush=True)
                     if interactive:
                         print(file=sys.stderr, flush=True)
+            temporary.flush()
+            os.fsync(temporary.fileno())
             print(f"verifying checksum for {name}", file=sys.stderr, flush=True)
             if checksum(temporary_path) != model["sha256"]:
                 raise RuntimeError(f"checksum mismatch for {name}")
