@@ -4,8 +4,9 @@ import hashlib
 import json
 import os
 import pathlib
-import shutil
+import sys
 import tempfile
+import time
 import urllib.parse
 import urllib.request
 
@@ -53,11 +54,50 @@ def download(model, root):
     with tempfile.NamedTemporaryFile(dir=destination.parent, delete=False) as temporary:
         temporary_path = pathlib.Path(temporary.name)
         try:
-            print(f"downloading {model['name']}", flush=True)
+            name = model["name"]
+            print(f"downloading {name}", file=sys.stderr, flush=True)
             with urllib.request.urlopen(request) as response:
-                shutil.copyfileobj(response, temporary)
+                content_length = response.headers.get("Content-Length")
+                try:
+                    total = int(content_length) if content_length else None
+                except ValueError:
+                    total = None
+
+                downloaded = 0
+                last_report = 0.0
+                interactive = sys.stderr.isatty()
+                while chunk := response.read(1024 * 1024):
+                    temporary.write(chunk)
+                    downloaded += len(chunk)
+                    now = time.monotonic()
+                    if now - last_report < 0.25 and total != downloaded:
+                        continue
+                    last_report = now
+                    if total:
+                        message = (
+                            f"{name}: {downloaded / total:.1%} "
+                            f"({downloaded / (1024**3):.2f} / "
+                            f"{total / (1024**3):.2f} GiB)"
+                        )
+                    else:
+                        message = f"{name}: {downloaded / (1024**3):.2f} GiB"
+                    prefix = "\r" if interactive else ""
+                    print(f"{prefix}{message}", file=sys.stderr, flush=True)
+                if total:
+                    message = (
+                        f"{name}: 100.0% "
+                        f"({downloaded / (1024**3):.2f} / "
+                        f"{total / (1024**3):.2f} GiB)"
+                    )
+                else:
+                    message = f"{name}: {downloaded / (1024**3):.2f} GiB"
+                prefix = "\r" if interactive else ""
+                print(f"{prefix}{message}", file=sys.stderr, flush=True)
+                if interactive:
+                    print(file=sys.stderr, flush=True)
+            print(f"verifying checksum for {name}", file=sys.stderr, flush=True)
             if checksum(temporary_path) != model["sha256"]:
-                raise RuntimeError(f"checksum mismatch for {model['name']}")
+                raise RuntimeError(f"checksum mismatch for {name}")
             temporary_path.replace(destination)
         finally:
             temporary_path.unlink(missing_ok=True)
