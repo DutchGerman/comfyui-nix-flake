@@ -51,6 +51,11 @@ Create a CUDA-enabled GPU Pod using the published image. Configure:
 - HTTP port `8188`
 - Optional runtime secret: `HF_TOKEN`
 
+Expose port `8188/http` in the Runpod Pod configuration to make ComfyUI
+available through Runpod's HTTP proxy. The image's exposed-port metadata alone
+does not create an HTTP service for an existing Pod. Runpod then provides a URL
+like `https://<POD_ID>-8188.proxy.runpod.net` under the Pod's HTTP services.
+
 After connecting to the Pod terminal over SSH:
 
 ```sh
