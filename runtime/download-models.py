@@ -4,11 +4,14 @@ import hashlib
 import json
 import os
 import pathlib
+import shutil
 import sys
 import tempfile
 import time
 import urllib.parse
 import urllib.request
+
+from huggingface_hub import hf_hub_download
 
 
 def checksum(path):
@@ -17,6 +20,28 @@ def checksum(path):
         for chunk in iter(lambda: file.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def huggingface_reference(model):
+    repo_id = model.get("repo_id")
+    filename = model.get("filename")
+    revision = model.get("revision")
+    if repo_id and filename:
+        return repo_id, filename, revision or "main"
+
+    parts = urllib.parse.urlsplit(model["url"]).path.strip("/").split("/")
+    try:
+        resolve = parts.index("resolve")
+        revision = parts[resolve + 1]
+        repo_id = "/".join(parts[:resolve])
+        filename = "/".join(parts[resolve + 2:])
+    except (ValueError, IndexError):
+        raise RuntimeError(
+            "Hugging Face models require repo_id and filename or a resolve URL"
+        ) from None
+    if not repo_id or not filename:
+        raise RuntimeError("invalid Hugging Face model reference")
+    return repo_id, filename, revision
 
 
 def download(model, root):
@@ -29,11 +54,9 @@ def download(model, root):
 
     provider = model["provider"]
     url = model["url"]
-    request = urllib.request.Request(url)
     if provider == "huggingface":
         token = os.environ.get("HF_TOKEN")
-        if token:
-            request.add_header("Authorization", f"Bearer {token}")
+        repo_id, filename, revision = huggingface_reference(model)
     elif provider == "civitai":
         token = os.environ.get("CIVITAI_TOKEN")
         if token:
@@ -45,6 +68,7 @@ def download(model, root):
             )
             request = urllib.request.Request(url)
     elif provider == "url":
+        request = urllib.request.Request(url)
         token_name = model.get("authEnv")
         if token_name and os.environ.get(token_name):
             request.add_header("Authorization", f"Bearer {os.environ[token_name]}")
@@ -56,26 +80,46 @@ def download(model, root):
         try:
             name = model["name"]
             print(f"downloading {name}", file=sys.stderr, flush=True)
-            with urllib.request.urlopen(request) as response:
-                content_length = response.headers.get("Content-Length")
-                try:
-                    total = int(content_length) if content_length else None
-                except ValueError:
-                    total = None
+            if provider == "huggingface":
+                source = hf_hub_download(
+                    repo_id=repo_id,
+                    filename=filename,
+                    revision=revision,
+                    token=token,
+                )
+                with pathlib.Path(source).open("rb") as source_file:
+                    shutil.copyfileobj(source_file, temporary)
+            else:
+                with urllib.request.urlopen(request) as response:
+                    content_length = response.headers.get("Content-Length")
+                    try:
+                        total = int(content_length) if content_length else None
+                    except ValueError:
+                        total = None
 
-                downloaded = 0
-                last_report = 0.0
-                interactive = sys.stderr.isatty()
-                while chunk := response.read(1024 * 1024):
-                    temporary.write(chunk)
-                    downloaded += len(chunk)
-                    now = time.monotonic()
-                    if now - last_report < 0.25 and total != downloaded:
-                        continue
-                    last_report = now
+                    downloaded = 0
+                    last_report = 0.0
+                    interactive = sys.stderr.isatty()
+                    while chunk := response.read(1024 * 1024):
+                        temporary.write(chunk)
+                        downloaded += len(chunk)
+                        now = time.monotonic()
+                        if now - last_report < 0.25 and total != downloaded:
+                            continue
+                        last_report = now
+                        if total:
+                            message = (
+                                f"{name}: {downloaded / total:.1%} "
+                                f"({downloaded / (1024**3):.2f} / "
+                                f"{total / (1024**3):.2f} GiB)"
+                            )
+                        else:
+                            message = f"{name}: {downloaded / (1024**3):.2f} GiB"
+                        prefix = "\r" if interactive else ""
+                        print(f"{prefix}{message}", file=sys.stderr, flush=True)
                     if total:
                         message = (
-                            f"{name}: {downloaded / total:.1%} "
+                            f"{name}: 100.0% "
                             f"({downloaded / (1024**3):.2f} / "
                             f"{total / (1024**3):.2f} GiB)"
                         )
@@ -83,18 +127,8 @@ def download(model, root):
                         message = f"{name}: {downloaded / (1024**3):.2f} GiB"
                     prefix = "\r" if interactive else ""
                     print(f"{prefix}{message}", file=sys.stderr, flush=True)
-                if total:
-                    message = (
-                        f"{name}: 100.0% "
-                        f"({downloaded / (1024**3):.2f} / "
-                        f"{total / (1024**3):.2f} GiB)"
-                    )
-                else:
-                    message = f"{name}: {downloaded / (1024**3):.2f} GiB"
-                prefix = "\r" if interactive else ""
-                print(f"{prefix}{message}", file=sys.stderr, flush=True)
-                if interactive:
-                    print(file=sys.stderr, flush=True)
+                    if interactive:
+                        print(file=sys.stderr, flush=True)
             print(f"verifying checksum for {name}", file=sys.stderr, flush=True)
             if checksum(temporary_path) != model["sha256"]:
                 raise RuntimeError(f"checksum mismatch for {name}")

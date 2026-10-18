@@ -1,9 +1,16 @@
 { pkgs }:
 let
+  downloaderPython = pkgs.python3.withPackages (pythonPackages: [
+    pythonPackages.huggingface-hub
+    pythonPackages.hf-xet
+  ]);
   downloader = pkgs.writeShellApplication {
     name = "download-comfyui-models";
-    runtimeInputs = [ pkgs.python3 ];
-    text = ''exec python3 ${../runtime/download-models.py} "$@"'';
+    runtimeInputs = [ downloaderPython ];
+    text = ''
+      export HF_XET_HIGH_PERFORMANCE=1
+      exec ${downloaderPython}/bin/python ${../runtime/download-models.py} "$@"
+    '';
   };
   nixComfyScript = pkgs.writeScriptBin "nix-comfy" ''
     #!${pkgs.nushell}/bin/nu
