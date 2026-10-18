@@ -8,6 +8,7 @@ let
       pkgs.bash
       pkgs.coreutils
       pkgs.cacert
+      pkgs.fakeNss
       pkgs.python3
       pkgs.nix
       pkgs.git
