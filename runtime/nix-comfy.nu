@@ -158,7 +158,9 @@ def main [...args: string] {
       ^comfyui --listen $listen --port $port --base-directory $root ...$extraArgs ...($args | skip 2)
     }
     "status" => {
-      for root in (glob ($workspace | path join "profiles" "*")) {
+      let installed = (glob ($workspace | path join "profiles" "*")
+        | where { |path| ($path | path type) == "symlink" })
+      for root in $installed {
         let complete = ($root | path join ".complete")
         if ($complete | path exists) {
           let revision = (open ($root | path join ".revision") | str trim | default "unknown")
