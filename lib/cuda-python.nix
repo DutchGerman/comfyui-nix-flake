@@ -214,14 +214,24 @@ let
   cudaPython = basePkgs.python313.override {
     packageOverrides = final: prev: { inherit torch torchvision; };
   };
+  comfyuiSource = basePkgs.fetchgit {
+    url = "https://github.com/Comfy-Org/ComfyUI.git";
+    rev = "426f5eea52a7ece1dd599fff4cb6cd1f352ddd24";
+    hash = "sha256-3lv80HpyKFJHQTOaws1knIC7YdGkKm2S1WkVidUwMNI=";
+  };
+  comfyuiBase = basePkgs.comfyui.overrideAttrs (_: {
+    version = "0.43.0";
+    src = comfyuiSource;
+  });
   pkgs = basePkgs // {
     python3 = cudaPython;
-    comfyui = basePkgs.comfyui.override { python3 = cudaPython; };
+    comfyui = comfyuiBase.override { python3 = cudaPython; };
   };
 in {
   inherit pkgs torch torchvision;
   packages = {
     inherit torch torchvision;
+    comfyui-cpu = comfyuiBase;
     "cuda-python" = cudaPython.withPackages (ps: [ ps.torch ps.torchvision ]);
   };
   checks.cuda-enabled = pkgs.runCommand "comfyui-cuda-enabled" { } ''
