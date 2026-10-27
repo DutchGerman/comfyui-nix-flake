@@ -110,6 +110,10 @@
   ];
   inputAssets = [ ];
 
+  runtime = {
+    extraArgs = [ "--enable-cors-header" ];
+  };
+
   dependencies = {
     python = [ ];
     customNodes = [ ];

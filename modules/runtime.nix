@@ -27,6 +27,7 @@ let
     pkgs.nushell
     pkgs.python3
     comfyuiPython
+    pkgs.uv
     downloader
   ];
   profileList = pkgs.symlinkJoin {

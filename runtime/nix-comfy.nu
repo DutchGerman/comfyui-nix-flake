@@ -116,6 +116,7 @@ def main [...args: string] {
         ^cp -rL ($built | path join "workflows" ".") ($root | path join "workflows")
         ^cp -rL ($built | path join "input" ".") ($root | path join "input")
         ^cp -rL ($built | path join "custom_nodes" ".") ($root | path join "custom_nodes")
+        ^chmod -R u+rwX ($root | path join "custom_nodes")
         let venv = ($root | path join ".venv")
         print "creating profile Python environment"
         let basePython = (which python | get path.0?)
@@ -127,6 +128,21 @@ def main [...args: string] {
         if not ($venvPython | path exists) {
           fail "profile Python environment was not created"
         }
+        let profileData = (open ($built | path join "profile.json"))
+        let comfyuiRequirements = ($profileData.comfyuiMain | path dirname | path join "requirements.txt")
+        if not ($comfyuiRequirements | path exists) {
+          fail $"ComfyUI requirements are missing: ($comfyuiRequirements)"
+        }
+        print "installing ComfyUI Python requirements"
+        run-streaming $venvPython [
+          "-m"
+          "pip"
+          "install"
+          "--no-input"
+          "--prefer-binary"
+          "-r"
+          $comfyuiRequirements
+        ]
         let requirements = (glob ($root | path join "custom_nodes" "*" "requirements.txt"))
         for requirement in $requirements {
           print $"installing unrestricted Python requirements from ($requirement)"
@@ -136,9 +152,6 @@ def main [...args: string] {
             "install"
             "--no-input"
             "--prefer-binary"
-            "--upgrade"
-            "--upgrade-strategy"
-            "eager"
             "-r"
             $requirement
           ]
@@ -186,6 +199,7 @@ def main [...args: string] {
       if not ($python | path exists) {
         fail $"profile Python environment is missing; reinstall profile ($profile)"
       }
+      ^chmod -R u+rwX ($root | path join "custom_nodes")
       print "profile Python environment:"
       run-streaming $python ["-c", "import sys, torch; print(sys.version.split()[0]); print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available())"]
       ^$python $profileData.comfyuiMain --listen $listen --port $port --base-directory $root ...$extraArgs ...($args | skip 2)
