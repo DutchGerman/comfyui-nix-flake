@@ -25,7 +25,6 @@ let
     pkgs.git
     pkgs.nix
     pkgs.nushell
-    pkgs.python3
     comfyuiPython
     pkgs.uv
     downloader

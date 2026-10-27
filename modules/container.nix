@@ -9,7 +9,6 @@ let
       pkgs.coreutils
       pkgs.cacert
       pkgs.fakeNss
-      pkgs.python3
       pkgs.comfyui.pythonEnv
       pkgs.nix
       pkgs.git
