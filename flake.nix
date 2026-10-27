@@ -17,9 +17,13 @@
             config = { allowUnfree = true; };
           };
           cuda = import ./lib/cuda-python.nix { inherit basePkgs; };
+          comfyui = import ./lib/comfyui.nix {
+            inherit basePkgs;
+            inherit (cuda) cudaPython torch torchvision;
+          };
         in {
-          _module.args.pkgs = cuda.pkgs;
-          packages = cuda.packages;
+          _module.args.pkgs = comfyui.pkgs;
+          packages = cuda.packages // comfyui.packages;
           checks = cuda.checks;
         };
     };
