@@ -12,6 +12,7 @@ let
       exec ${downloaderPython}/bin/python ${../runtime/download-models.py} "$@"
     '';
   };
+  comfyuiPython = pkgs.comfyui.pythonEnv;
   nixComfyScript = pkgs.writeScriptBin "nix-comfy" ''
     #!${pkgs.nushell}/bin/nu
     ${builtins.readFile ../runtime/nix-comfy.nu}
@@ -25,6 +26,7 @@ let
     pkgs.nix
     pkgs.nushell
     pkgs.python3
+    comfyuiPython
     downloader
   ];
   profileList = pkgs.symlinkJoin {

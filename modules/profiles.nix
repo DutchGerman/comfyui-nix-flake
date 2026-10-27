@@ -7,6 +7,7 @@ let
       json = builtins.toJSON {
         inherit name;
         installName = name;
+        comfyuiMain = "${pkgs.comfyuiSource}/main.py";
         inherit (composed) models runtime dependencies;
       };
       farm = label: entries:

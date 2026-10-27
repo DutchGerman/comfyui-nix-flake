@@ -225,6 +225,7 @@ let
   });
   pkgs = basePkgs // {
     python3 = cudaPython;
+    comfyuiSource = comfyuiSource;
     comfyui = comfyuiBase.override { python3 = cudaPython; };
   };
 in {

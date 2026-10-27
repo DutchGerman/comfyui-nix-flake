@@ -116,6 +116,33 @@ def main [...args: string] {
         ^cp -rL ($built | path join "workflows" ".") ($root | path join "workflows")
         ^cp -rL ($built | path join "input" ".") ($root | path join "input")
         ^cp -rL ($built | path join "custom_nodes" ".") ($root | path join "custom_nodes")
+        let venv = ($root | path join ".venv")
+        print "creating profile Python environment"
+        let basePython = (which python | get path.0?)
+        if ($basePython | is-empty) {
+          fail "ComfyUI Python environment is missing from the image"
+        }
+        run-streaming $basePython ["-m", "venv", "--system-site-packages", $venv]
+        let venvPython = ($venv | path join "bin" "python")
+        if not ($venvPython | path exists) {
+          fail "profile Python environment was not created"
+        }
+        let requirements = (glob ($root | path join "custom_nodes" "*" "requirements.txt"))
+        for requirement in $requirements {
+          print $"installing unrestricted Python requirements from ($requirement)"
+          run-streaming $venvPython [
+            "-m"
+            "pip"
+            "install"
+            "--no-input"
+            "--prefer-binary"
+            "--upgrade"
+            "--upgrade-strategy"
+            "eager"
+            "-r"
+            $requirement
+          ]
+        }
         $revision | save -f ($root | path join ".revision")
         touch ($root | path join ".complete")
         let current = ($profilesRoot | path join $profile)
@@ -155,7 +182,13 @@ def main [...args: string] {
       let listen = ($env.COMFYUI_LISTEN? | default ($profileData.runtime.listen? | default "0.0.0.0"))
       let port = ($env.COMFYUI_PORT? | default ($profileData.runtime.port? | default 8188))
       let extraArgs = ($profileData.runtime.extraArgs? | default [])
-      ^comfyui --listen $listen --port $port --base-directory $root ...$extraArgs ...($args | skip 2)
+      let python = ($root | path join ".venv" "bin" "python")
+      if not ($python | path exists) {
+        fail $"profile Python environment is missing; reinstall profile ($profile)"
+      }
+      print "profile Python environment:"
+      run-streaming $python ["-c", "import sys, torch; print(sys.version.split()[0]); print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available())"]
+      ^$python $profileData.comfyuiMain --listen $listen --port $port --base-directory $root ...$extraArgs ...($args | skip 2)
     }
     "status" => {
       let installed = (glob ($workspace | path join "profiles" "*")
