@@ -1,5 +1,9 @@
 { pkgs, runtimeModule }:
 let
+  ldconfig = pkgs.runCommand "comfyui-ldconfig" { } ''
+    mkdir -p $out/sbin
+    ln -s ${pkgs.glibc.bin}/bin/ldconfig $out/sbin/ldconfig
+  '';
   image = pkgs.dockerTools.buildLayeredImage {
     name = "comfyui-nix-flake";
     tag = "latest";
@@ -16,14 +20,11 @@ let
       pkgs.stdenv.cc.cc.lib
       pkgs.glibc
       pkgs.glibc.bin
+      ldconfig
       pkgs.uv
       runtimeModule.downloader
       runtimeModule.profileList
     ];
-    extraCommands = ''
-      mkdir -p $out/sbin
-      ln -s ${pkgs.glibc.bin}/bin/ldconfig $out/sbin/ldconfig
-    '';
     config = {
       Cmd = [ "${pkgs.coreutils}/bin/sleep" "infinity" ];
       Env = [
