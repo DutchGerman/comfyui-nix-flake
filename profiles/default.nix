@@ -1,7 +1,8 @@
 { pkgs }:
 let
   qwenImage = import ./qwen-image-2-1.nix { inherit pkgs; };
-  availableProfiles = [ qwenImage ];
+  mossImage = import ./moss-image.nix { inherit pkgs; };
+  availableProfiles = [ qwenImage mossImage ];
   selectedProfiles = availableProfiles;
 
   resourceNames = resources: map (resource: resource.name) resources;
@@ -70,6 +71,7 @@ let
       };
 in {
   inherit qwenImage;
+  inherit mossImage;
 
   available = assert unique "profile"
     (map (profile: profile.installName or profile.name) availableProfiles)
