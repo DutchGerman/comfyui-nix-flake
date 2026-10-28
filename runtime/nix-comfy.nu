@@ -56,6 +56,9 @@ def valid-profile [profile: string] {
 def main [...args: string] {
   let workspace = ($env.COMFYUI_WORKSPACE? | default "/workspace")
   let remote = ($env.NIX_COMFY_FLAKE? | default "github:DutchGerman/comfyui-nix-flake/master")
+  let home = ($workspace | path join ".home")
+  $env.HOME = $home
+  mkdir $home
   let state = ($workspace | path join ".nix-comfy")
   mkdir $state $workspace
 
@@ -115,8 +118,8 @@ def main [...args: string] {
         print "installing profile assets"
         ^cp -rL ($built | path join "workflows" ".") ($root | path join "workflows")
         ^cp -rL ($built | path join "input" ".") ($root | path join "input")
-        ^cp -rL ($built | path join "custom_nodes" ".") ($root | path join "custom_nodes")
-        ^chmod -R u+rwX ($root | path join "custom_nodes")
+        ^tar -C ($built | path join "custom_nodes") -chf - .
+        | ^tar -C ($root | path join "custom_nodes") -x --no-same-owner --no-same-permissions --mode=u+rwX
         let venv = ($root | path join ".venv")
         print "creating profile Python environment"
         let basePython = (which python | get path.0?)
@@ -199,7 +202,6 @@ def main [...args: string] {
       if not ($python | path exists) {
         fail $"profile Python environment is missing; reinstall profile ($profile)"
       }
-      ^chmod -R u+rwX ($root | path join "custom_nodes")
       print "profile Python environment:"
       run-streaming $python ["-c", "import sys, torch; print(sys.version.split()[0]); print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available())"]
       ^$python $profileData.comfyuiMain --listen $listen --port $port --base-directory $root ...$extraArgs ...($args | skip 2)

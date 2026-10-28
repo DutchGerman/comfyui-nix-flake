@@ -8,7 +8,10 @@ let
     name = "download-comfyui-models";
     runtimeInputs = [ downloaderPython ];
     text = ''
-      export HF_XET_HIGH_PERFORMANCE=1
+      export HF_HUB_DISABLE_XET="''${HF_HUB_DISABLE_XET:-1}"
+      if [ "$HF_HUB_DISABLE_XET" != 1 ]; then
+        export HF_XET_HIGH_PERFORMANCE=1
+      fi
       exec ${downloaderPython}/bin/python ${../runtime/download-models.py} "$@"
     '';
   };
@@ -26,6 +29,7 @@ let
     pkgs.nix
     pkgs.nushell
     comfyuiPython
+    pkgs.gnutar
     pkgs.uv
     downloader
   ];

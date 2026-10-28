@@ -18,14 +18,11 @@ Build the Runpod image:
 nix build .#container
 ```
 
-The result is an OCI image archive. Import it with Docker or Podman and run it with an NVIDIA GPU and a persistent volume mounted at `/workspace`.
+The result is an OCI image archive. Import it with Docker or Podman and run it with an NVIDIA GPU and a global volume mounted at `/workspace`.
 
 The published image is `ghcr.io/dutchgerman/comfyui-nix-flake:latest` (the commit SHA is also published as a tag). It includes Nix, Git, Nushell, CUDA-enabled ComfyUI using pinned official PyTorch CUDA wheels, the checksum downloader, and a generic runtime CLI, but no repository profiles or model weights. The single-GPU runtime does not build or enable NCCL distributed support. The default container command keeps the pod alive for SSH access:
 
-```sh
-docker run --gpus all -p 8188:8188 -v comfyui-workspace:/workspace \
-  ghcr.io/dutchgerman/comfyui-nix-flake:latest
-```
+Use a Runpod Global Volume mounted at `/workspace`; all Pods using the image should attach the same volume at that path.
 
 From the pod, install the profile once and start ComfyUI in the foreground:
 
@@ -45,9 +42,8 @@ The container workflow ignores profile-only changes. `.github/workflows/profiles
 Create a CUDA-enabled GPU Pod using the published image. Configure:
 
 - Container image: `ghcr.io/dutchgerman/comfyui-nix-flake:latest`
-- Persistent volume mounted at `/workspace`
+- Runpod Global Volume mounted at `/workspace`
 - 30 GB container disk
-- 100 GB persistent volume mounted at `/workspace`
 - HTTP port `8188`
 - Optional runtime secret: `HF_TOKEN`
 
@@ -56,7 +52,7 @@ available through Runpod's HTTP proxy. The image's exposed-port metadata alone
 does not create an HTTP service for an existing Pod. Runpod then provides a URL
 like `https://<POD_ID>-8188.proxy.runpod.net` under the Pod's HTTP services.
 
-After connecting to the Pod terminal over SSH:
+After connecting to any Pod attached to the Global Volume over SSH:
 
 ```sh
 nix-comfy profiles
@@ -129,7 +125,7 @@ Set credentials only at runtime. Supported model manifests can reference an envi
 
 ## Storage
 
-Mount persistent storage at `/workspace`. Profiles are isolated under:
+The Runpod Global Volume is mounted at `/workspace`. Profiles are isolated under:
 
 - `/workspace/profiles/<profile>/models`
 - `/workspace/profiles/<profile>/workflows`
@@ -137,9 +133,9 @@ Mount persistent storage at `/workspace`. Profiles are isolated under:
 - `/workspace/profiles/<profile>/input`
 - `/workspace/profiles/<profile>/output`
 
-The container accepts `HF_TOKEN`, `CIVITAI_TOKEN`, `COMFYUI_WORKSPACE`, `COMFYUI_LISTEN`, and `COMFYUI_PORT` at runtime. It targets a persistent Runpod Pod with HTTP port `8188`; Serverless handlers and application-level authentication are out of scope.
+The container accepts `HF_TOKEN`, `CIVITAI_TOKEN`, `HF_HUB_DISABLE_XET`, `COMFYUI_WORKSPACE`, `COMFYUI_LISTEN`, and `COMFYUI_PORT` at runtime. Attach the same Global Volume to additional Pods to reuse installed profiles and models; do not install the same profile concurrently. The runtime targets Runpod HTTP port `8188`; Serverless handlers and application-level authentication are out of scope.
 
-The Qwen Image 2.1 example needs substantial model storage. Plan for the 100 GB persistent volume; the 30 GB container disk must also retain the Nix store created by runtime profile builds.
+The Qwen Image 2.1 example needs substantial model storage. Size the Global Volume accordingly; the 30 GB container disk must also retain the Nix store created by runtime profile builds.
 
 The image runs Nix as a root-capable single-user local-store setup: `nix-comfy` sets `sandbox = false` and an empty build-users group because Runpod does not provide NixOS/systemd or a daemon. The image's writable `/nix` layer is required for `nix build`; mount or persist it if the platform resets the container layer. This is deliberately explicit rather than pretending a daemon-backed store is available.
 
