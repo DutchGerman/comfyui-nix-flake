@@ -38,8 +38,8 @@ let
     version = "0.2.40";
     format = "wheel";
     src = basePkgs.fetchurl {
-      url = "https://files.pythonhosted.org/packages/9c/2e/1c6c621a1cd2ba89ae12fe99e095faa50986c0e6485461170732adfcfa6d/comfy_kitchen-0.2.40-py3-none-any.whl";
-      hash = "sha256-5YNPLOmTyNXqjAFlAVfGOXQrWijssNlSU3d/MbUkgJk=";
+      url = "https://files.pythonhosted.org/packages/5d/40/1871ee8c58eeef8d15cbf49a461eba0775303f2d9eb34c11af7c29e455c1/comfy_kitchen-0.2.40-cp312-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl";
+      hash = "sha256-63JmZMdyGJ5uznQodkh/E0mWWAi4VHQnkOkAHbt8D50=";
     };
     doCheck = false;
   };
