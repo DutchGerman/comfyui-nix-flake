@@ -118,8 +118,8 @@ def main [...args: string] {
         print "installing profile assets"
         ^cp -rL ($built | path join "workflows" ".") ($root | path join "workflows")
         ^cp -rL ($built | path join "input" ".") ($root | path join "input")
-        ^tar -C ($built | path join "custom_nodes") -chf - .
-        | ^tar -C ($root | path join "custom_nodes") -x --no-same-owner --no-same-permissions --mode=u+rwX
+        ^tar -C ($built | path join "custom_nodes") -chf - --mode=u+rwX .
+        | ^tar -C ($root | path join "custom_nodes") -x --no-same-owner --no-same-permissions --no-overwrite-dir --touch
         let venv = ($root | path join ".venv")
         print "creating profile Python environment"
         let basePython = (which python | get path.0?)
