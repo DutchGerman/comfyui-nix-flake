@@ -28,8 +28,8 @@ let
     config = {
       Cmd = [ "${pkgs.coreutils}/bin/sleep" "infinity" ];
       Env = [
-        "HOME=/workspace/.home"
-        "HF_HOME=/workspace/.cache/huggingface"
+        "HOME=/tmp/comfyui-home"
+        "HF_HOME=/tmp/huggingface"
         "COMFYUI_WORKSPACE=/workspace"
         "SSL_CERT_FILE=${pkgs.cacert}/etc/ssl/certs/ca-bundle.crt"
         "LD_LIBRARY_PATH=${pkgs.stdenv.cc.cc.lib}/lib:/usr/lib/x86_64-linux-gnu"

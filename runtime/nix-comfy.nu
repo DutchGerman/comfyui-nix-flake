@@ -56,7 +56,7 @@ def valid-profile [profile: string] {
 def main [...args: string] {
   let workspace = ($env.COMFYUI_WORKSPACE? | default "/workspace")
   let remote = ($env.NIX_COMFY_FLAKE? | default "github:DutchGerman/comfyui-nix-flake/master")
-  let home = ($workspace | path join ".home")
+  let home = "/tmp/comfyui-home"
   $env.HOME = $home
   mkdir $home
   let state = ($workspace | path join ".nix-comfy")
