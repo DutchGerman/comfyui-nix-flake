@@ -76,6 +76,14 @@
       };
     }
     {
+      name = "comfyui-dynamicprompts";
+      source = pkgs.fetchgit {
+        url = "https://github.com/adieyal/comfyui-dynamicprompts.git";
+        rev = "3f2fff32358cf39e21b8b440ca87eac9a8e2bade";
+        hash = "sha256-L9QaTputJRxps9oIo56WlAzKYJGJapTuX87xdTiqkZw=";
+      };
+    }
+    {
       name = "rgthree-comfy";
       source = pkgs.fetchgit {
         url = "https://github.com/rgthree/rgthree-comfy.git";
