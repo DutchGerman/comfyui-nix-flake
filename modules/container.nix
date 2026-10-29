@@ -5,6 +5,7 @@ let
     ln -s ${pkgs.glibc.bin}/bin/ldconfig $out/sbin/ldconfig
   '';
   opencvRuntimeLibraries = [
+    pkgs.libGL
     pkgs.libxcb
     pkgs.libx11
     pkgs.libxext
