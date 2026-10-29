@@ -22,6 +22,45 @@ def checksum(path):
     return digest.hexdigest()
 
 
+def verification_marker(path):
+    return path.with_name(f".{path.name}.nix-comfy-verified.json")
+
+
+def cached_verification_matches(path, expected_checksum):
+    try:
+        record = json.loads(verification_marker(path).read_text())
+        metadata = path.stat()
+        return (
+            record["sha256"] == expected_checksum
+            and record["size"] == metadata.st_size
+            and record["mtime_ns"] == metadata.st_mtime_ns
+        )
+    except (FileNotFoundError, KeyError, OSError, TypeError, ValueError):
+        return False
+
+
+def cache_verification(path, digest):
+    marker = verification_marker(path)
+    metadata = path.stat()
+    record = {
+        "sha256": digest,
+        "size": metadata.st_size,
+        "mtime_ns": metadata.st_mtime_ns,
+    }
+    with tempfile.NamedTemporaryFile(
+        mode="w", dir=marker.parent, prefix=f".{marker.name}.", delete=False
+    ) as temporary:
+        temporary_path = pathlib.Path(temporary.name)
+        try:
+            json.dump(record, temporary)
+            temporary.write("\n")
+            temporary.flush()
+            os.fsync(temporary.fileno())
+            temporary_path.replace(marker)
+        finally:
+            temporary_path.unlink(missing_ok=True)
+
+
 def huggingface_reference(model):
     repo_id = model.get("repo_id")
     filename = model.get("filename")
@@ -48,9 +87,16 @@ def download(model, root):
     destination = root / model["directory"] / model["name"]
     destination.parent.mkdir(parents=True, exist_ok=True)
 
-    if destination.exists() and checksum(destination) == model["sha256"]:
-        print(f"using {destination}", flush=True)
-        return
+    if destination.exists():
+        expected_checksum = model["sha256"]
+        if cached_verification_matches(destination, expected_checksum):
+            print(f"using {destination} (cached checksum)", flush=True)
+            return
+        print(f"verifying checksum for {model['name']}", file=sys.stderr, flush=True)
+        if checksum(destination) == expected_checksum:
+            cache_verification(destination, expected_checksum)
+            print(f"using {destination}", flush=True)
+            return
 
     provider = model["provider"]
     url = model["url"]
@@ -136,6 +182,7 @@ def download(model, root):
             if checksum(temporary_path) != model["sha256"]:
                 raise RuntimeError(f"checksum mismatch for {name}")
             temporary_path.replace(destination)
+            cache_verification(destination, model["sha256"])
         finally:
             temporary_path.unlink(missing_ok=True)
 
