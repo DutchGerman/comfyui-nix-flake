@@ -135,7 +135,7 @@ The Runpod Global Volume is mounted at `/workspace`. Profiles are isolated under
 
 Profile Python environments are kept on local Pod storage under `/tmp/nix-comfy-venvs` and recreated automatically when a new Pod needs them. Set `NIX_COMFY_VENV_ROOT` to override that location.
 
-The container accepts `HF_TOKEN`, `CIVITAI_TOKEN`, `HF_HUB_DISABLE_XET`, `COMFYUI_WORKSPACE`, `COMFYUI_LISTEN`, and `COMFYUI_PORT` at runtime. Attach the same Global Volume to additional Pods to reuse installed profiles and models; do not install the same profile concurrently. The runtime targets Runpod HTTP port `8188`; Serverless handlers and application-level authentication are out of scope.
+The container accepts `HF_TOKEN`, `CIVITAI_TOKEN`, `HF_HUB_DISABLE_XET`, `COMFYUI_WORKSPACE`, `COMFYUI_USER_DIRECTORY`, `COMFYUI_LISTEN`, and `COMFYUI_PORT` at runtime. User and Manager state defaults to `/tmp/comfyui-user` so startup does not modify Global Volume permissions. Attach the same Global Volume to additional Pods to reuse installed profiles and models; do not install the same profile concurrently. The runtime targets Runpod HTTP port `8188`; Serverless handlers and application-level authentication are out of scope.
 
 The Qwen Image 2.1 example needs substantial model storage. Size the Global Volume accordingly; the 30 GB container disk must also retain the Nix store created by runtime profile builds.
 

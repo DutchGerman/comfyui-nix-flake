@@ -113,8 +113,10 @@ def main [...args: string] {
   let workspace = ($env.COMFYUI_WORKSPACE? | default "/workspace")
   let remote = ($env.NIX_COMFY_FLAKE? | default "github:DutchGerman/comfyui-nix-flake/master")
   let home = "/tmp/comfyui-home"
+  let userDirectory = ($env.COMFYUI_USER_DIRECTORY? | default "/tmp/comfyui-user")
   $env.HOME = $home
   mkdir $home
+  mkdir $userDirectory
   let state = ($workspace | path join ".nix-comfy")
   mkdir $state $workspace
 
@@ -228,7 +230,7 @@ def main [...args: string] {
       let python = (ensure-profile-python $root $profile $revision $profileData)
       print "profile Python environment:"
       run-streaming $python ["-c", "import sys, torch; print(sys.version.split()[0]); print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available())"]
-      ^$python $profileData.comfyuiMain --listen $listen --port $port --base-directory $root ...$extraArgs ...($args | skip 2)
+      ^$python $profileData.comfyuiMain --listen $listen --port $port --base-directory $root --user-directory $userDirectory ...$extraArgs ...($args | skip 2)
     }
     "status" => {
       let installed = (glob ($workspace | path join "profiles" "*")
