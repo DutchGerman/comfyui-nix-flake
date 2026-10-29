@@ -6,6 +6,7 @@ let
   '';
   opencvRuntimeLibraries = [
     pkgs.libGL
+    pkgs.glib
     pkgs.libxcb
     pkgs.libx11
     pkgs.libxext
