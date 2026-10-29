@@ -16,9 +16,11 @@ let
     '';
   };
   comfyuiPython = pkgs.comfyui.pythonEnv;
+  nixComfyFallback = pkgs.writeText "nix-comfy-fallback.nu" (builtins.readFile ../runtime/nix-comfy.nu);
   nixComfyScript = pkgs.writeScriptBin "nix-comfy" ''
     #!${pkgs.nushell}/bin/nu
-    ${builtins.readFile ../runtime/nix-comfy.nu}
+    $env.NIX_COMFY_FALLBACK = "${nixComfyFallback}"
+    ${builtins.readFile ../runtime/bootstrap-comfy.nu}
   '';
   runtimeInputs = [
     pkgs.bash

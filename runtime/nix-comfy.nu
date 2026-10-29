@@ -24,6 +24,62 @@ def run-streaming [command: string, args: list<string>] {
   }
 }
 
+def profile-venv [profile: string, revision: string] {
+  let root = ($env.NIX_COMFY_VENV_ROOT? | default "/tmp/nix-comfy-venvs")
+  $root | path join $profile $revision
+}
+
+def ensure-profile-python [root: path, profile: string, revision: string, profileData] {
+  let venv = (profile-venv $profile $revision)
+  let venvPython = ($venv | path join "bin" "python")
+  let marker = ($venv | path join ".complete")
+  if ($marker | path exists) and ($venvPython | path exists) {
+    return $venvPython
+  }
+  if ($venv | path exists) {
+    rm -rf $venv
+  }
+  mkdir ($venv | path dirname)
+  print "creating profile Python environment"
+  let basePython = (which python | get path.0?)
+  if ($basePython | is-empty) {
+    fail "ComfyUI Python environment is missing from the image"
+  }
+  run-streaming $basePython ["-m" "venv" "--system-site-packages" $venv]
+  if not ($venvPython | path exists) {
+    fail "profile Python environment was not created"
+  }
+  let comfyuiRequirements = ($profileData.comfyuiMain | path dirname | path join "requirements.txt")
+  if not ($comfyuiRequirements | path exists) {
+    fail $"ComfyUI requirements are missing: ($comfyuiRequirements)"
+  }
+  print "installing ComfyUI Python requirements"
+  run-streaming $venvPython [
+    "-m"
+    "pip"
+    "install"
+    "--no-input"
+    "--prefer-binary"
+    "-r"
+    $comfyuiRequirements
+  ]
+  let requirements = (glob ($root | path join "custom_nodes" "*" "requirements.txt"))
+  for requirement in $requirements {
+    print $"installing unrestricted Python requirements from ($requirement)"
+    run-streaming $venvPython [
+      "-m"
+      "pip"
+      "install"
+      "--no-input"
+      "--prefer-binary"
+      "-r"
+      $requirement
+    ]
+  }
+  $revision | save -f $marker
+  $venvPython
+}
+
 def resolve-index [remote: string, indexFile: string, lockedRemote: string, lockedRevision: string] {
   print "resolving flake revision"
   let metadata = (run-command "nix" ["flake", "metadata", $remote, "--json"] | from json)
@@ -127,45 +183,8 @@ def main [...args: string] {
         | str join "\n"
         | ^tar -C $customNodes -chf - --mode=u+rwX --files-from=-
         | ^tar -C ($root | path join "custom_nodes") -x --no-same-owner --no-same-permissions --no-overwrite-dir --touch
-        let venv = ($root | path join ".venv")
-        print "creating profile Python environment"
-        let basePython = (which python | get path.0?)
-        if ($basePython | is-empty) {
-          fail "ComfyUI Python environment is missing from the image"
-        }
-        run-streaming $basePython ["-m", "venv", "--system-site-packages", $venv]
-        let venvPython = ($venv | path join "bin" "python")
-        if not ($venvPython | path exists) {
-          fail "profile Python environment was not created"
-        }
         let profileData = (open ($built | path join "profile.json"))
-        let comfyuiRequirements = ($profileData.comfyuiMain | path dirname | path join "requirements.txt")
-        if not ($comfyuiRequirements | path exists) {
-          fail $"ComfyUI requirements are missing: ($comfyuiRequirements)"
-        }
-        print "installing ComfyUI Python requirements"
-        run-streaming $venvPython [
-          "-m"
-          "pip"
-          "install"
-          "--no-input"
-          "--prefer-binary"
-          "-r"
-          $comfyuiRequirements
-        ]
-        let requirements = (glob ($root | path join "custom_nodes" "*" "requirements.txt"))
-        for requirement in $requirements {
-          print $"installing unrestricted Python requirements from ($requirement)"
-          run-streaming $venvPython [
-            "-m"
-            "pip"
-            "install"
-            "--no-input"
-            "--prefer-binary"
-            "-r"
-            $requirement
-          ]
-        }
+        ensure-profile-python $root $profile $revision $profileData | ignore
         $revision | save -f ($root | path join ".revision")
         touch ($root | path join ".complete")
         let current = ($profilesRoot | path join $profile)
@@ -205,10 +224,8 @@ def main [...args: string] {
       let listen = ($env.COMFYUI_LISTEN? | default ($profileData.runtime.listen? | default "0.0.0.0"))
       let port = ($env.COMFYUI_PORT? | default ($profileData.runtime.port? | default 8188))
       let extraArgs = ($profileData.runtime.extraArgs? | default [])
-      let python = ($root | path join ".venv" "bin" "python")
-      if not ($python | path exists) {
-        fail $"profile Python environment is missing; reinstall profile ($profile)"
-      }
+      let revision = (open ($root | path join ".revision") | str trim)
+      let python = (ensure-profile-python $root $profile $revision $profileData)
       print "profile Python environment:"
       run-streaming $python ["-c", "import sys, torch; print(sys.version.split()[0]); print('Torch:', torch.__version__); print('CUDA available:', torch.cuda.is_available())"]
       ^$python $profileData.comfyuiMain --listen $listen --port $port --base-directory $root ...$extraArgs ...($args | skip 2)
