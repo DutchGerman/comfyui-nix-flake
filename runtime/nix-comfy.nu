@@ -161,11 +161,23 @@ def main [...args: string] {
       print $"building profile ($profile)"
       let built = (run-command "nix" ["build", $"($locked)#($output)", "--no-link", "--print-out-paths"])
       let profilesRoot = ($workspace | path join "profiles")
+      let current = ($profilesRoot | path join $profile)
+      let sharedModels = ($state | path join "models" $profile)
       mkdir $profilesRoot
       let temporary = (mktemp -d -p $profilesRoot $".($profile).XXXXXX")
       try {
         let root = $temporary
-        mkdir ($root | path join "models") ($root | path join "workflows") ($root | path join "custom_nodes") ($root | path join "input") ($root | path join "output")
+        mkdir ($root | path join "workflows") ($root | path join "custom_nodes") ($root | path join "input") ($root | path join "output")
+        mkdir ($state | path join "models")
+        if not ($sharedModels | path exists) {
+          let existingModels = ($current | path join "models")
+          if ($existingModels | path exists) {
+            ^ln -s $existingModels $sharedModels
+          } else {
+            mkdir $sharedModels
+          }
+        }
+        ^ln -s $sharedModels ($root | path join "models")
         cp ($built | path join "profile.json") ($root | path join "profile.json")
         let download = (which download-comfyui-models | get path.0?)
         if ($download | is-empty) {
@@ -189,7 +201,6 @@ def main [...args: string] {
         ensure-profile-python $root $profile $revision $profileData | ignore
         $revision | save -f ($root | path join ".revision")
         touch ($root | path join ".complete")
-        let current = ($profilesRoot | path join $profile)
         if (($current | path exists) and (($current | path type) != "symlink")) {
           mv $current ($profilesRoot | path join $".($profile).legacy.(random int 0..2147483647)")
         }

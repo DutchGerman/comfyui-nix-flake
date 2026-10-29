@@ -48,6 +48,13 @@ def fetch-runtime [state: path, locked: record] {
 def main [...args: string] {
   let workspace = ($env.COMFYUI_WORKSPACE? | default "/workspace")
   let remote = ($env.NIX_COMFY_FLAKE? | default "github:DutchGerman/comfyui-nix-flake/master")
+  # Configure Nix before resolving the flake; bootstrap metadata lookup happens
+  # before the fetched runtime can apply its own environment.
+  $env.NIX_REMOTE = "local"
+  $env.NIX_CONFIG = (($env.NIX_CONFIG? | default "") + "
+  experimental-features = nix-command flakes
+  sandbox = false
+  build-users-group =")
   let state = ($workspace | path join ".nix-comfy")
   mkdir $state $workspace
   let command = ($args | get 0? | default "")

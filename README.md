@@ -133,6 +133,8 @@ The Runpod Global Volume is mounted at `/workspace`. Profiles are isolated under
 - `/workspace/profiles/<profile>/input`
 - `/workspace/profiles/<profile>/output`
 
+Model files are backed by `/workspace/.nix-comfy/models/<profile>` and linked into the active profile. This keeps them available when a profile is staged again on another Pod instead of downloading them into each temporary profile directory.
+
 Profile Python environments are kept on local Pod storage under `/tmp/nix-comfy-venvs` and recreated automatically when a new Pod needs them. Set `NIX_COMFY_VENV_ROOT` to override that location.
 
 Model downloads write a small sidecar verification record next to each successfully checked model. Reinstalls use the record when the expected checksum, file size, and modification time still match, avoiding another full read from the Global Volume.
