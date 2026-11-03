@@ -37,18 +37,24 @@ let
     && builtins.stringLength model.sha256 == 64
     && builtins.match "[0-9a-fA-F]*" model.sha256 != null;
 
-  compose = profiles:
+  modelManifest = profiles:
     let
       models =
         builtins.concatLists (map (profile: profile.models or [ ]) profiles);
+      modelDestinations = map (model: "${model.directory}/${model.name}") models;
+    in assert builtins.all validModel models;
+    assert unique "model" modelDestinations == modelDestinations;
+    models;
+
+  compose = profiles:
+    let
+      models = modelManifest profiles;
       workflows =
         builtins.concatLists (map (profile: profile.workflows or [ ]) profiles);
       inputAssets = builtins.concatLists
         (map (profile: profile.inputAssets or [ ]) profiles);
       customNodes = builtins.concatLists
         (map (profile: profile.customNodes or [ ]) profiles);
-      modelDestinations =
-        map (model: "${model.directory}/${model.name}") models;
       runtime = {
         listen = runtimeValue profiles "listen" "0.0.0.0";
         port = runtimeValue profiles "port" 8188;
@@ -60,8 +66,7 @@ let
           python = [ ];
           customNodes = [ ];
         } profiles;
-    in assert builtins.all validModel models;
-    assert unique "model" modelDestinations == modelDestinations;
+    in
     assert unique "workflow" (resourceNames workflows)
       == resourceNames workflows;
     assert unique "input asset" (resourceNames inputAssets)
@@ -81,6 +86,7 @@ in {
     availableProfiles;
 
   selected = selectedProfiles;
+  selectedModels = modelManifest selectedProfiles;
 
   inherit compose;
 }

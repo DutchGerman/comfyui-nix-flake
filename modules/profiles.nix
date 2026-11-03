@@ -55,7 +55,6 @@ in
 {
   packages = profileAttrs // {
     profile-index = profileIndex;
-    models = pkgs.writeText "models.json"
-      (builtins.toJSON (profiles.compose profiles.selected).models);
+    models = pkgs.writeText "models.json" (builtins.toJSON profiles.selectedModels);
   };
 }
