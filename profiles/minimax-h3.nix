@@ -197,7 +197,7 @@
 
   inputAssets = [ ];
   runtime = {
-    extraArgs = [ "--enable-cors-header" ];
+    extraArgs = [ "--enable-cors-header" "--use-sage-attention" ];
   };
   dependencies = {
     python = [ ];

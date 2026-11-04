@@ -212,7 +212,7 @@ let
     pythonImportsCheck = [ "torchvision" ];
   };
   cudaPython = basePkgs.python313.override {
-    packageOverrides = _: prev: { inherit torch torchvision; };
+    packageOverrides = _: prev: { inherit torch torchvision triton; };
   };
 in {
   inherit cudaPython torch torchvision;

@@ -33,6 +33,29 @@ let
     };
     doCheck = false;
   };
+  sageAttention = pythonPackages.buildPythonPackage {
+    pname = "sageattention";
+    version = "2.2.0";
+    format = "wheel";
+    src = basePkgs.fetchurl {
+      url = "https://huggingface.co/pseudobacon/SageAttention2/resolve/main/sageattention-2.2.0%2Bcu130torch2.11.0andhigher-cp39-abi3-linux_x86_64.whl";
+      hash = "sha256-ewOY3UWALuspZJC51Fhj7EI67pNPvSruvpBZHyHOxIw=";
+    };
+    dependencies = [ torch cudaPython.pkgs.triton ];
+    nativeBuildInputs = [ basePkgs.patchelf ];
+    postFixup = ''
+      find "$out/${pythonPackages.python.sitePackages}" -type f -name '*.so' \
+        -exec ${basePkgs.patchelf}/bin/patchelf --add-rpath "${torch}/${pythonPackages.python.sitePackages}/torch/lib:${basePkgs.stdenv.cc.cc.lib}/lib" {} +
+    '';
+    pythonImportsCheck = [ "sageattention" ];
+    doCheck = false;
+    meta = {
+      description = "SageAttention 2.2.0 CUDA 13 wheel for Blackwell GPUs";
+      homepage = "https://huggingface.co/pseudobacon/SageAttention2";
+      license = basePkgs.lib.licenses.asl20;
+      platforms = [ "x86_64-linux" ];
+    };
+  };
   comfyKitchen = pythonPackages.buildPythonPackage {
     pname = "comfy-kitchen";
     version = "0.2.40";
@@ -100,12 +123,17 @@ let
       comfy-aimdo = comfyAimdo;
       comfy-kitchen = comfyKitchen;
       comfyui-workflow-templates = comfyuiWorkflowTemplates;
+      sageattention = sageAttention;
     };
+  };
+  comfyui = comfyuiBase.override {
+    python3 = comfyuiPython;
+    extraPackages = ps: [ ps.sageattention ];
   };
   pkgs = basePkgs // {
     python3 = comfyuiPython;
     comfyuiSource = comfyuiSource;
-    comfyui = comfyuiBase.override { python3 = comfyuiPython; };
+    inherit comfyui;
   };
 in {
   inherit pkgs;
